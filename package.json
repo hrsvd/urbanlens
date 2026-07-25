@@ -1,0 +1,59 @@
+{
+  "name": "hsr-intelligence-map",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "data:ingest": "node scripts/ingest-data.mjs",
+    "data:osm": "node scripts/ingest-data.mjs --osm-only",
+    "data:environment": "node scripts/ingest-data.mjs --environment-only"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.66.9",
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/distance": "^7.2.0",
+    "@turf/helpers": "^7.2.0",
+    "@turf/length": "^7.2.0",
+    "framer-motion": "^12.4.7",
+    "lucide-react": "^0.475.0",
+    "maplibre-gl": "^5.1.0",
+    "next": "^16.2.11",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
+    "zod": "^3.24.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.6"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.3",
+    "minimatch": "^10.2.5",
+    "brace-expansion": "^5.0.8"
+  }
+}
