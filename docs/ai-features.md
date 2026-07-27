@@ -16,21 +16,36 @@ UrbanLens includes two AI-powered features built on top of the existing ingested
 
 Each 100 m × 100 m analysis cell can carry a pre-generated 2–4 sentence natural-language synthesis that describes the strongest and weakest scored dimensions for that cell, based on its static features and scores. The summary appears in the intelligence panel below the composite score.
 
-### How it is generated
+### How it is generated — live on demand (no pre-generation required)
+
+When a user opens a cell that has no pre-generated summary, the intelligence panel automatically calls `GET /api/ai/cell-summary/:cellId`. The panel shows a "Generating summary…" spinner while the request is in-flight. The endpoint:
+
+1. Checks an in-process memory overlay first (instant if a previous visitor already triggered generation in this server process).
+2. Falls back to the file-based pre-generated map (`public/data/{localityId}-cell-summaries.json`) if it exists.
+3. If neither cache has the cell, calls Gemini live with the same grounding prompt used by the offline script.
+4. Stores the result in the in-process overlay so the next request for that cell in the same process returns immediately.
+
+**Rate-limit handling**: if Gemini returns 429, the panel shows "AI summary is limited per user on the free tier — try another area shortly." — a calm, intentional-looking state, not an error.
+
+### Optional pre-generation (batch warm-up)
+
+The batch script still exists as an optional warm-up tool:
 
 ```
 npm run ai:summaries -- --locality hsr
 npm run ai:summaries:all                  # all 8 localities
 ```
 
-The script reads the locality bootstrap artifact and static intelligence file, builds a compact context object per cell, and calls Gemini 1.5 Flash with a grounding prompt. It rate-limits to 1 request/1.1 s (free-tier safe), saves incrementally after each cell, and skips already-generated cells unless `--force` is passed.
+Pre-generating means zero LLM latency for cells already in the file. But it is no longer required — any cell with no prior generation works correctly through the live path alone.
 
-The grounding prompt:
+The grounding prompt (used by both paths):
 > "Use ONLY the data in the JSON below. Do not add facts from outside this data. Never invent a number or claim not present in the provided JSON."
 
 ### Storage
 
-Output: `public/data/{localityId}-cell-summaries.json` — a flat `{ cellId: summaryText }` map. The cell metrics API (`GET /api/cells/:id/metrics`) reads this at request time and attaches `aiSummary` to the `AnalysisCell` response.
+Pre-generated summaries: `public/data/{localityId}-cell-summaries.json` — a flat `{ cellId: summaryText }` map.  
+Live-generated summaries: in-process memory overlay (`liveSummaryOverlay` in `src/server/data.ts`), reset on server restart.  
+The cell metrics API (`GET /api/cells/:id/metrics`) still reads the file-based map and returns `aiSummary` if present; the intelligence panel fetches live summaries separately via `GET /api/ai/cell-summary/:cellId`.
 
 ### Context sent to the model
 
@@ -70,7 +85,7 @@ A conversational interface that answers natural-language questions about Bengalu
 
 ### Rate limiting
 
-Per-session, in-memory: 20 queries per session per rolling hour. Sessions are identified by a client-generated opaque string stored in `sessionStorage`. The server returns `rateLimited: true` in the JSON body (not a hard 429 body that would break the UI) with a friendly message. The counter resets when the server process restarts.
+Per-session, in-memory: 20 queries per session per rolling hour. Sessions are identified by a client-generated opaque string stored in `sessionStorage`. When the session limit or the Gemini free-tier quota is hit, the server returns a normal `reply` string (as an assistant message) rather than an error response, so the chat thread remains intact and the input stays enabled. The user can read the message and try again — the UI never locks or displays a raw error. The session counter resets when the server process restarts.
 
 ### Context sent to the model per locality rollup
 

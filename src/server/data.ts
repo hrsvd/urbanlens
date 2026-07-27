@@ -15,6 +15,20 @@ const intelligenceCache = new Map<LocalityId, Promise<StaticIntelligence | null>
 // Per-locality AI cell-summary memos: cellId → summary string.
 const summariesCache = new Map<LocalityId, Promise<Record<string, string>>>();
 
+// In-process overlay for live-generated summaries (not file-backed; resets on restart).
+// A simple cellId → text map that acts as a fast first-check for the live endpoint.
+const liveSummaryOverlay = new Map<string, string>();
+
+/** Return a live-generated summary for a cell if one exists in this process. */
+export function getLiveSummary(cellId: string): string | null {
+  return liveSummaryOverlay.get(cellId) ?? null;
+}
+
+/** Store a live-generated summary so subsequent requests skip the LLM call. */
+export function setCachedSummary(cellId: string, text: string): void {
+  liveSummaryOverlay.set(cellId, text);
+}
+
 function bootstrapPath(localityId: LocalityId): string {
   return path.join(process.cwd(), "public", "data", `${localityId}-bootstrap.json`);
 }
