@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Database, LayoutGrid, TriangleAlert } from "lucide-react";
+import { Bot, Database, LayoutGrid, TriangleAlert } from "lucide-react";
 import { LOCALITIES } from "@/lib/constants";
 import type { LocalityId } from "@/lib/constants";
 import { haversineDistanceMeters } from "@/lib/geo";
 import { useMapStore } from "@/lib/store";
 import type { AnalysisCell, MapBootstrap, SearchItem } from "@/lib/types";
 import { HelpDialog } from "./help-dialog";
+import { HomeAssistant } from "./home-assistant";
 import { IntelligencePanel } from "./intelligence-panel";
 import { LocalitySwitcher } from "./locality-switcher";
 import { MapCanvas, type MapHandle } from "./map-canvas";
@@ -38,6 +39,7 @@ export function MapExperience() {
   const [progress, setProgress] = useState(12);
   const [helpOpen, setHelpOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const activeLocality = useMapStore((state) => state.activeLocality);
   const setActiveLocality = useMapStore((state) => state.setActiveLocality);
@@ -211,6 +213,7 @@ export function MapExperience() {
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <SupportPanel open={supportOpen} onClose={() => setSupportOpen(false)} />
+      <HomeAssistant open={assistantOpen} onClose={() => setAssistantOpen(false)} />
 
       {/* Credit + support — fixed bottom-left, above OSM attribution */}
       <div className="map-credit">
@@ -228,6 +231,15 @@ export function MapExperience() {
           onClick={() => setSupportOpen(true)}
         >
           Support
+        </button>
+        <button
+          type="button"
+          className="map-credit-assistant"
+          onClick={() => setAssistantOpen(true)}
+          aria-label="Open intelligence assistant"
+        >
+          <Bot size={12} aria-hidden="true" />
+          Ask AI
         </button>
       </div>
 
