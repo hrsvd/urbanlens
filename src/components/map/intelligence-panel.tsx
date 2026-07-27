@@ -71,80 +71,6 @@ const categoryIcons: Record<string, React.ComponentType<React.SVGProps<SVGSVGEle
   civic: Shield,
 };
 
-// ── Score breakdown ───────────────────────────────────────────────────────────
-type BreakdownRow = {
-  key: string;
-  label: string;
-  rating: number;
-  weightPct: number;
-  contribution: number;
-  confidence: number;
-  color: string;
-};
-
-function computeBreakdown(metrics: CellMetric[]): BreakdownRow[] {
-  const weights = DEFAULT_WEIGHTS as Record<string, number>;
-  const scored = metrics.filter(
-    (metric) => metric.ratingOutOf10 !== null && weights[metric.key] !== undefined,
-  );
-  const availableWeight = scored.reduce((sum, metric) => sum + weights[metric.key], 0) || 1;
-  return scored
-    .map((metric) => {
-      const rating = metric.ratingOutOf10 as number;
-      const normalised = weights[metric.key] / availableWeight;
-      return {
-        key: metric.key,
-        label: metric.label,
-        rating,
-        weightPct: Math.round(weights[metric.key] * 100),
-        contribution: Number((rating * normalised).toFixed(2)),
-        confidence: metric.confidence,
-        color: scoreToColor(rating),
-      };
-    })
-    .sort((a, b) => b.contribution - a.contribution);
-}
-
-function ScoreBreakdown({ rows }: { rows: BreakdownRow[] }) {
-  if (!rows.length) return null;
-  const maxContribution = Math.max(...rows.map((row) => row.contribution)) || 1;
-  return (
-    <section className="score-breakdown" aria-label="Score breakdown by feature">
-      <div className="breakdown-head">
-        <span>Why this score</span>
-        <em>sub-score × weight = contribution</em>
-      </div>
-      <ul>
-        {rows.map((row, index) => (
-          <motion.li
-            key={row.key}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.04 * index, duration: 0.28 }}
-          >
-            <div className="breakdown-label">
-              <span>{row.label}</span>
-              <span className="breakdown-weight">{row.weightPct}% wt</span>
-            </div>
-            <div className="breakdown-track">
-              <motion.i
-                style={{ background: row.color }}
-                initial={{ width: 0 }}
-                animate={{ width: `${(row.contribution / maxContribution) * 100}%` }}
-                transition={{ delay: 0.04 * index, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </div>
-            <div className="breakdown-value">
-              <strong>{row.rating.toFixed(1)}</strong>
-              <span className="contribution-value">+{row.contribution.toFixed(2)}</span>
-            </div>
-          </motion.li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(value?: string) {
   if (!value) return "Not provided";
@@ -192,12 +118,11 @@ function MetricCard({
   metric,
   open = false,
   weightPct,
-  contribution,
 }: {
   metric: CellMetric;
   open?: boolean;
+  /** This metric's share of its category's scored weight (0–100). */
   weightPct?: number;
-  contribution?: number;
 }) {
   const Icon = metricIcons[metric.key] || Gauge;
   const score = metric.ratingOutOf10;
@@ -225,11 +150,10 @@ function MetricCard({
       </summary>
       <div className="metric-detail">
         <p>{metric.explanation}</p>
-        {weightPct !== undefined && score !== null && (
+        {weightPct !== undefined && weightPct > 0 && score !== null && (
           <div className="metric-contribution">
-            <div><span>Weight</span><strong>{weightPct}%</strong></div>
             <div><span>Sub-score</span><strong>{score.toFixed(1)} / 10</strong></div>
-            <div><span>Contribution</span><strong>+{(contribution ?? 0).toFixed(2)}</strong></div>
+            <div><span>Category weight</span><strong>{weightPct}%</strong></div>
           </div>
         )}
         {score === null && isContextOnly && (
@@ -265,19 +189,25 @@ function MetricCard({
 // ── Category card ─────────────────────────────────────────────────────────────
 function CategoryCard({
   category,
-  breakdownByKey,
   defaultOpen,
 }: {
   category: MetricCategory;
-  breakdownByKey: Map<string, BreakdownRow>;
   defaultOpen?: boolean;
 }) {
+  const weights = DEFAULT_WEIGHTS as Record<string, number>;
+  const totalConfiguredWeight = Object.values(DEFAULT_WEIGHTS).reduce((a, b) => a + b, 0);
   const Icon = categoryIcons[category.key] || Gauge;
   const score = category.score;
   const scoredCount = category.metrics.filter((m) => m.ratingOutOf10 !== null).length;
   const contextCount = category.metrics.filter(
     (m) => m.ratingOutOf10 === null && m.value !== null && m.value !== undefined,
   ).length;
+
+  // Sum of DEFAULT_WEIGHTS for scored metrics in this category → composite share
+  const categoryCompositeWeight = category.metrics.reduce(
+    (sum, m) => sum + (weights[m.key] ?? 0), 0,
+  );
+  const compositePct = Math.round((categoryCompositeWeight / totalConfiguredWeight) * 100);
 
   const riskClass =
     score === null ? "unknown" :
@@ -291,9 +221,9 @@ function CategoryCard({
         <div className="category-title">
           <strong>{category.label}</strong>
           <span>
-            {scoredCount > 0 ? `${scoredCount} scored` : ""}
-            {scoredCount > 0 && contextCount > 0 ? " · " : ""}
-            {contextCount > 0 ? `${contextCount} context` : ""}
+            {compositePct > 0 ? `${compositePct}% of composite` : "context only"}
+            {scoredCount > 0 ? ` · ${scoredCount} scored` : ""}
+            {contextCount > 0 ? ` · ${contextCount} context` : ""}
           </span>
         </div>
         <div className="category-score">
@@ -307,14 +237,17 @@ function CategoryCard({
       <div className="category-metrics">
         <p className="category-desc">{category.description}</p>
         {category.metrics.map((metric, index) => {
-          const row = breakdownByKey.get(metric.key);
+          // Metric's share of this category's total scored weight (for context inside category)
+          const mw = weights[metric.key] ?? 0;
+          const categoryWeightPct = categoryCompositeWeight > 0
+            ? Math.round((mw / categoryCompositeWeight) * 100)
+            : undefined;
           return (
             <MetricCard
               key={metric.key}
               metric={metric}
               open={index === 0 && scoredCount > 0}
-              weightPct={row?.weightPct}
-              contribution={row?.contribution}
+              weightPct={categoryWeightPct}
             />
           );
         })}
@@ -391,14 +324,6 @@ export function IntelligencePanel({
   const close = useMapStore((state) => state.setPanelOpen);
   const context = useMapStore((state) => state.selectedContext);
   const selectedCellId = useMapStore((state) => state.selectedCellId);
-
-  // Flatten all metrics for breakdown computation
-  const allMetrics = cell
-    ? Object.values(cell.metrics).filter((m): m is CellMetric => Boolean(m))
-    : [];
-
-  const breakdown = computeBreakdown(allMetrics);
-  const breakdownByKey = new Map(breakdown.map((row) => [row.key, row]));
 
   const floodScore = cell?.metrics.floodSusceptibility.ratingOutOf10 ?? null;
   const showFloodAlert = cell?.floodAlert === true;
@@ -487,15 +412,14 @@ export function IntelligencePanel({
                 <CategorySummaryRow categories={categories} />
               )}
 
-              {/* Score breakdown (why this score) */}
-              <ScoreBreakdown rows={breakdown} />
-
-              {/* Category cards hierarchy */}
+              {/* Category cards — composite → category sub-score → feature → sourced evidence */}
               {categories.length > 0 && (
                 <>
                   <div className="panel-section-title">
-                    <span>Neighborhood Intelligence</span>
-                    <em>{categories.filter((c) => c.score !== null).length} scored categories · {breakdown.length} metrics</em>
+                    <span>Score breakdown by category</span>
+                    <em>
+                      {categories.filter((c) => c.score !== null).length} scored · {categories.filter((c) => c.score === null).length} context-only
+                    </em>
                   </div>
                   <div className="category-list">
                     {categories.map((category, index) => (
@@ -507,7 +431,6 @@ export function IntelligencePanel({
                       >
                         <CategoryCard
                           category={category}
-                          breakdownByKey={breakdownByKey}
                           defaultOpen={category.key === defaultOpenKey}
                         />
                       </motion.div>
