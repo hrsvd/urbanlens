@@ -12,12 +12,19 @@ const bootstrapCache = new Map<LocalityId, Promise<MapBootstrap>>();
 // Per-locality static-intelligence memos.
 const intelligenceCache = new Map<LocalityId, Promise<StaticIntelligence | null>>();
 
+// Per-locality AI cell-summary memos: cellId → summary string.
+const summariesCache = new Map<LocalityId, Promise<Record<string, string>>>();
+
 function bootstrapPath(localityId: LocalityId): string {
   return path.join(process.cwd(), "public", "data", `${localityId}-bootstrap.json`);
 }
 
 function intelligencePath(localityId: LocalityId): string {
   return path.join(process.cwd(), "public", "data", `${localityId}-static-intelligence.json`);
+}
+
+function summariesPath(localityId: LocalityId): string {
+  return path.join(process.cwd(), "public", "data", `${localityId}-cell-summaries.json`);
 }
 
 export function getBootstrap(localityId: LocalityId = DEFAULT_LOCALITY_ID): Promise<MapBootstrap> {
@@ -51,6 +58,22 @@ export async function getCell(cellId: string): Promise<AnalysisCellFeature | nul
 
 export function localityForCell(cellId: string): LocalityId {
   return localityFromCellId(cellId) ?? DEFAULT_LOCALITY_ID;
+}
+
+/**
+ * Returns the pre-generated AI summaries map for a locality.
+ * Returns an empty object when the file doesn't exist (AI summaries not yet generated).
+ */
+export function getCellSummaries(localityId: LocalityId): Promise<Record<string, string>> {
+  let promise = summariesCache.get(localityId);
+  if (!promise) {
+    promise = fs
+      .readFile(summariesPath(localityId), "utf8")
+      .then((text) => JSON.parse(text) as Record<string, string>)
+      .catch(() => ({}));
+    summariesCache.set(localityId, promise);
+  }
+  return promise;
 }
 
 // Returns all locality bootstraps that have a corresponding file on disk.

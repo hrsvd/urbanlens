@@ -14,7 +14,9 @@
     "test:e2e:ui": "playwright test --ui",
     "data:ingest": "node scripts/ingest-data.mjs",
     "data:ingest:all": "node scripts/ingest-all.mjs",
-    "data:augment": "node scripts/augment-data.mjs"
+    "data:augment": "node scripts/augment-data.mjs",
+    "ai:summaries": "node --env-file=.env.local scripts/generate-ai-summaries.mjs",
+    "ai:summaries:all": "node --env-file=.env.local scripts/generate-ai-summaries.mjs --locality all"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.9",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCell, getStaticIntelligence, localityForCell } from "@/server/data";
+import { getCell, getStaticIntelligence, localityForCell, getCellSummaries } from "@/server/data";
 import { getBootstrap } from "@/server/data";
 import { fetchAirQuality, fetchWeather } from "@/server/external";
 import { buildCellMetrics } from "@/server/metrics";
@@ -13,10 +13,11 @@ export async function GET(
   const { cellId } = await params;
   const localityId = localityForCell(cellId);
 
-  const [cell, bootstrap, intelligence] = await Promise.all([
+  const [cell, bootstrap, intelligence, summaries] = await Promise.all([
     getCell(cellId),
     getBootstrap(localityId),
     getStaticIntelligence(localityId),
+    getCellSummaries(localityId),
   ]);
   if (!cell) return NextResponse.json({ error: "Unknown analysis cell." }, { status: 404 });
 
@@ -37,7 +38,10 @@ export async function GET(
     centerLongitude,
   );
 
-  return NextResponse.json(response, {
+  // Attach pre-generated AI summary if available; null otherwise.
+  const aiSummary = summaries[cellId] ?? null;
+
+  return NextResponse.json({ ...response, aiSummary }, {
     headers: {
       "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600",
       "X-Data-Completeness": air && weather ? "complete" : "partial",
