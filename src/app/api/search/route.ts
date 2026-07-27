@@ -40,6 +40,11 @@ const STOPWORDS = new Set([
   "marathahalli",
   "bellandur",
   "hebbal",
+  // Address noise words: suppress so "No. 15, Main Road" reduces to ["15", "main", "road"]
+  "on",
+  "at",
+  "exact",
+  "address",
 ]);
 
 function flatten(query: string) {
@@ -64,7 +69,10 @@ function normalizeOrdinal(token: string): string {
 }
 
 function itemTokens(item: SearchItem): Set<string> {
-  return new Set(tokenize(flatten(`${item.name} ${item.kind}`)));
+  const text = item.addressMatch
+    ? `${item.name} ${item.note ?? ""}`
+    : `${item.name} ${item.kind}`;
+  return new Set(tokenize(flatten(text)));
 }
 
 type Corpus = {

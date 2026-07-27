@@ -340,6 +340,9 @@ function normalizeOsm(buildingRaw, contextRaw, boundary) {
         kind: tags.building,
         class: tags.building === "apartments" ? "apartments" : "building",
         ...parseHeight(tags, element.id),
+        addrFull: tags["addr:full"] ?? null,
+        addrHouseNumber: tags["addr:housenumber"] ?? null,
+        addrStreet: tags["addr:street"] ?? null,
       });
       if (centroidInside(feature, boundary)) buildings.push(feature);
     }
@@ -837,17 +840,29 @@ function generateGrid(boundary, layers) {
 
 function buildSearchIndex(layers) {
   const entries = new Map();
-  const add = (id, name, kind, coordinates) => {
+  const add = (id, name, kind, coordinates, note = undefined, addressMatch = false) => {
     if (!name || !coordinates) return;
     const key = `${name.toLowerCase()}-${kind}`;
     if (!entries.has(key)) {
-      entries.set(key, { id, name, kind, longitude: coordinates[0], latitude: coordinates[1] });
+      const entry = { id, name, kind, longitude: coordinates[0], latitude: coordinates[1] };
+      if (note) entry.note = note;
+      if (addressMatch) entry.addressMatch = true;
+      entries.set(key, entry);
     }
   };
   layers.pois.forEach((feature) =>
     add(feature.properties.id, feature.properties.name, feature.properties.kind, feature.geometry.coordinates));
-  layers.buildings.forEach((feature) =>
-    add(feature.properties.id, feature.properties.name, feature.properties.kind, featureCenter(feature)));
+  layers.buildings.forEach((feature) => {
+    add(feature.properties.id, feature.properties.name, feature.properties.kind, featureCenter(feature));
+    const { addrFull, addrHouseNumber, addrStreet } = feature.properties;
+    const addressStr = addrFull
+      ?? (addrHouseNumber && addrStreet ? `${addrHouseNumber}, ${addrStreet}` : null)
+      ?? (addrHouseNumber ? `No. ${addrHouseNumber}` : null);
+    if (addressStr) {
+      const note = addrStreet ? `On ${addrStreet}` : "Exact address";
+      add(`${feature.properties.id}-addr`, addressStr, "address", featureCenter(feature), note, true);
+    }
+  });
   layers.roads.forEach((feature) =>
     add(feature.properties.id, feature.properties.name, `${feature.properties.kind} road`, featureCenter(feature)));
   layers.green.forEach((feature) =>

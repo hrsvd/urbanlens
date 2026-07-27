@@ -645,6 +645,11 @@ button {
   background: rgba(169, 215, 189, 0.06);
 }
 
+.address-match-tag {
+  color: var(--mint-strong);
+  font-style: normal;
+}
+
 .search-results footer {
   padding: 0.62rem 0.85rem;
   border-top: 1px solid rgba(204, 226, 217, 0.07);

@@ -8,7 +8,7 @@ function ResultIcon({ kind }: { kind: string }) {
   if (/coordinate/.test(kind)) return <Crosshair aria-hidden="true" />;
   if (/intersection/.test(kind)) return <Route aria-hidden="true" />;
   if (/park|garden|playground|grass/.test(kind)) return <Trees aria-hidden="true" />;
-  if (/building|apartments|office/.test(kind)) return <Building2 aria-hidden="true" />;
+  if (/building|apartments|office|address/.test(kind)) return <Building2 aria-hidden="true" />;
   return <MapPin aria-hidden="true" />;
 }
 
@@ -162,7 +162,10 @@ export function SearchBar({ onSelect }: { onSelect: (item: SearchItem) => void }
               <ResultIcon kind={item.kind} />
               <span>
                 <strong>{item.name}</strong>
-                <em>{item.note ?? item.kind.replaceAll("_", " ")}</em>
+                <em>
+                  {item.addressMatch && <span className="address-match-tag">Exact address · </span>}
+                  {item.note ?? item.kind.replaceAll("_", " ")}
+                </em>
               </span>
               <span className="result-locality-tag">
                 {item.localityName && <small className="locality-tag">{item.localityName}</small>}

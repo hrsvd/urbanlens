@@ -182,6 +182,7 @@ export type SearchItem = {
   matchedTokens?: number;
   matchScore?: number;
   note?: string;
+  addressMatch?: boolean;       // true when result came from OSM addr:* tag, not name/brand
 };
 
 export type MapBootstrap = {
