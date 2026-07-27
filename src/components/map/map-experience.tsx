@@ -17,6 +17,7 @@ import { MapControls } from "./map-controls";
 import { MapLegend } from "./map-legend";
 import { MapLoader } from "./map-loader";
 import { SearchBar } from "./search-bar";
+import { SupportPanel } from "./support-panel";
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -36,6 +37,7 @@ export function MapExperience() {
   const [loaderVisible, setLoaderVisible] = useState(true);
   const [progress, setProgress] = useState(12);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   const activeLocality = useMapStore((state) => state.activeLocality);
   const setActiveLocality = useMapStore((state) => state.setActiveLocality);
@@ -208,6 +210,26 @@ export function MapExperience() {
         error={selectedQuery.isError}
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <SupportPanel open={supportOpen} onClose={() => setSupportOpen(false)} />
+
+      {/* Credit + support — fixed bottom-left, above OSM attribution */}
+      <div className="map-credit">
+        <a
+          href="https://github.com/hrsvd"
+          target="_blank"
+          rel="noreferrer"
+          className="map-credit-author"
+        >
+          Made with ♥ by Harsh
+        </a>
+        <button
+          type="button"
+          className="map-credit-support"
+          onClick={() => setSupportOpen(true)}
+        >
+          Support
+        </button>
+      </div>
 
       <div className="map-instruction" aria-hidden="true">
         <span>CLICK A CELL TO INSPECT</span>
