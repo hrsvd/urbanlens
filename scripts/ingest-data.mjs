@@ -880,6 +880,7 @@ const contextQuery = `[out:json][timeout:180];(
   nwr["tourism"](${bbox});
   nwr["office"](${bbox});
   nwr["public_transport"](${bbox});
+  nwr["railway"~"station|subway_entrance"](${bbox});
   node["highway"="bus_stop"](${bbox});
 );out tags center geom;`;
 
