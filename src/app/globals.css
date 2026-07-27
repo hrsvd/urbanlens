@@ -1464,6 +1464,62 @@ button {
   width: 0.75rem;
 }
 
+/* ── AI summary section (intelligence panel) ─────────────────────────────── */
+.ai-summary-section {
+  margin: 0 0.75rem 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: rgba(137, 179, 200, 0.05);
+  border: 1px solid rgba(137, 179, 200, 0.16);
+  border-radius: 0.5rem;
+}
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.ai-summary-header svg { width: 0.85rem; height: 0.85rem; }
+.ai-summary-header span { flex: 1; }
+
+.ai-badge {
+  font-size: 0.5rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+  background: rgba(137, 179, 200, 0.14);
+  color: var(--blue);
+  font-style: normal;
+}
+
+.ai-summary-text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.62;
+  color: var(--muted);
+}
+
+.ai-summary-placeholder {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--dim);
+  font-style: italic;
+}
+.ai-summary-placeholder code {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-style: normal;
+  background: rgba(255,255,255,0.04);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
 .score-method {
   display: grid;
   grid-template-columns: 1.8rem 1fr auto;

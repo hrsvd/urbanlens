@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   Antenna,
+  Bot,
   Building,
   ChevronDown,
   CloudRain,
@@ -290,6 +291,28 @@ function PanelSkeleton() {
   );
 }
 
+// ── AI summary section ────────────────────────────────────────────────────────
+function AiSummarySection({ summary }: { summary: string | null | undefined }) {
+  return (
+    <section className="ai-summary-section" aria-label="AI-generated summary">
+      <div className="ai-summary-header">
+        <Bot aria-hidden="true" />
+        <span>Plain-language summary</span>
+        <em className="ai-badge">AI · grounded</em>
+      </div>
+      {summary ? (
+        <p className="ai-summary-text">{summary}</p>
+      ) : (
+        <p className="ai-summary-placeholder">
+          AI summary will appear here once enabled. Run{" "}
+          <code>npm run ai:summaries</code> after adding your{" "}
+          <code>GEMINI_API_KEY</code>.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ── Category summary row (above category cards, shows quick stats) ─────────────
 function CategorySummaryRow({ categories }: { categories: MetricCategory[] }) {
   const scored = categories.filter((c) => c.score !== null);
@@ -399,6 +422,9 @@ export function IntelligencePanel({
                   <p>{Math.round(cell.confidence * 100)}% evidence confidence · {cell.sizeMeters} m × {cell.sizeMeters} m cell</p>
                 </div>
               </section>
+
+              {/* AI plain-language summary — directly below composite score */}
+              <AiSummarySection summary={cell.aiSummary} />
 
               {context && (
                 <div className="place-context">

@@ -158,6 +158,8 @@ export type AnalysisCell = {
   // Prominent flood alert when susceptibility score < 3.5 (high risk signal).
   // Shown regardless of the overall score so it cannot be averaged away.
   floodAlert?: boolean;
+  // Pre-generated natural-language summary (null when not yet generated or AI disabled).
+  aiSummary?: string | null;
 };
 
 export type MapFeatureProperties = {
