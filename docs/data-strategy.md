@@ -26,6 +26,7 @@ This keeps the "no database, static artifact" architecture ([docs/architecture.m
 | Air quality (PM2.5, AQI) | Open-Meteo / CAMS | Fast (hours) | Request-time | 45-minute server cache |
 | Weather / rainfall | Open-Meteo | Fast (hours) | Request-time | 15-minute server cache |
 | Static intelligence (metro, NDVI, UHI, civic) | Hand-authored per locality | Rare | `{localityId}-static-intelligence.json` | Manual update |
+| AI cell summaries | Gemini 1.5 Flash (grounded on static features) | Same cadence as bootstrap | `{localityId}-cell-summaries.json` | `npm run ai:summaries --locality <id>` after each ingestion |
 
 ## Ingestion vs. augmentation
 
@@ -40,6 +41,10 @@ Two offline entry points produce the same artifact fields:
 `public/data/{localityId}-static-intelligence.json` is hand-authored per locality and holds signals that require manual data collection: ward numbers, BMTC route context, Namma Metro stations, NDVI, UHI, BWSSB water context, civic complaint patterns, crime context, internet reliability.
 
 For the initial release, this file is only fully populated for HSR Layout. Other localities have stub files that explicitly mark these signals as unavailable. This is the honest default: better to show "unavailable" than to silently omit or invent locality-specific intelligence.
+
+## AI cell summaries
+
+`public/data/{localityId}-cell-summaries.json` contains pre-generated natural-language summaries, one per cell ID, produced by `scripts/generate-ai-summaries.mjs`. The summaries are derived exclusively from the bootstrap artifact and static intelligence file — no live or external data is included. They follow the same "same cadence as bootstrap" rule: regenerate after each ingestion run if cell data changed, and only if `GEMINI_API_KEY` is set. The generation script is incremental (skips already-generated cells) and rate-limited (1.1 s/request). The map functions fully without these files — cells show a placeholder until summaries are generated.
 
 ## Recommended operational cadence
 

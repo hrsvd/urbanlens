@@ -131,6 +131,45 @@ e2e/                     Playwright journeys
 
 The current uncompressed GeoJSON per locality is acceptable for an MVP and compresses substantially over HTTP. PMTiles with zoom-based generalized layers is the next performance step.
 
+## AI features
+
+### Shared AI provider (`src/server/ai-provider.ts`)
+
+All LLM calls are routed through a single module that wraps the Gemini REST API. Swapping model or provider is a one-file change. The module:
+
+- returns `null` (never throws) on missing key, API error, non-2xx response, Zod validation failure, or timeout;
+- validates the response with Zod before extracting text;
+- reads the model name from `GEMINI_MODEL` (default `gemini-1.5-flash`).
+
+`isAiEnabled()` exposes key presence so components and routes can render clean placeholder UI without a try/catch.
+
+### Feature: per-cell AI summary (pre-generated, offline)
+
+`scripts/generate-ai-summaries.mjs --locality <id>` generates natural-language summaries for every cell in a locality at ingestion time:
+
+- Rate limited to 1.1 s/request (free-tier Gemini safe).
+- Incrementally saves after each cell — resumable on failure.
+- Grounding prompt explicitly forbids the model from adding facts outside the provided JSON.
+- Output: `public/data/{localityId}-cell-summaries.json` (`{ cellId: summaryText }`).
+
+The cell metrics API (`GET /api/cells/:id/metrics`) reads this file and attaches `aiSummary` to the `AnalysisCell` response. The intelligence panel displays it below the composite score with a placeholder when the key is absent.
+
+### Feature: home-screen intelligence assistant (live, retrieval-before-generation)
+
+`POST /api/ai/chat` answers natural-language questions about Bengaluru localities:
+
+1. **Intent classification** — the query is classified as `specific-locality`, `address`, or `broad`.
+2. **Context retrieval** — for a specific-locality query, only that locality's rollup is fetched; for a broad query, all 8 rollups are fetched. Address queries also try to resolve the address hint via the existing search index.
+3. **Grounded prompt assembly** — the system prompt explicitly prohibits inventing numbers or claims not in the JSON. The full locality data is passed inline.
+4. **Per-session rate limiting** — 20 queries per session per rolling hour, enforced in-memory on the server. The client receives `disabled` or `rateLimited` flags; the UI never exposes a raw error.
+
+### AI grounding enforcement
+
+Every AI prompt contains:
+> "Use ONLY the data in the JSON below. Do not add facts from outside this data. Never invent a number or claim not present."
+
+The model is never asked to infer, extrapolate, or recommend. It receives structured locality data and returns a plain-language synthesis of that data only.
+
 ## Privacy and safety boundary
 
 The system has no authentication, tracking, resident reporting, saved places, speed-test collection, or personal movement history. Search terms are handled by the application's local OSM index. Every conclusion is attached to a cell, never a person or property.
