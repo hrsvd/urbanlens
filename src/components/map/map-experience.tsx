@@ -38,6 +38,7 @@ export function MapExperience() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   const activeLocality = useMapStore((state) => state.activeLocality);
+  const setActiveLocality = useMapStore((state) => state.setActiveLocality);
   const selectedCellId = useMapStore((state) => state.selectedCellId);
   const localityConfig = LOCALITIES[activeLocality];
 
@@ -109,8 +110,29 @@ export function MapExperience() {
     staleTime: 15 * 60 * 1000,
   });
 
+  const pendingFocusRef = useRef<SearchItem | null>(null);
+
   const onMapReady = useCallback(() => setMapReady(true), []);
-  const onSearchSelect = useCallback((item: SearchItem) => mapRef.current?.focus(item), []);
+
+  // After a cross-locality search switches the active locality, the map
+  // re-initialises with new data; consume the pending focus once it's ready.
+  useEffect(() => {
+    if (mapReady && pendingFocusRef.current) {
+      mapRef.current?.focus(pendingFocusRef.current);
+      pendingFocusRef.current = null;
+    }
+  }, [mapReady]);
+
+  const onSearchSelect = useCallback((item: SearchItem) => {
+    const targetLocality = (item.localityId ?? activeLocality) as LocalityId;
+    if (targetLocality !== activeLocality) {
+      // Item is in a different locality — switch first, focus after map reload.
+      pendingFocusRef.current = item;
+      setActiveLocality(targetLocality);
+    } else {
+      mapRef.current?.focus(item);
+    }
+  }, [activeLocality, setActiveLocality]);
 
   if (bootstrapQuery.isError) {
     return (
