@@ -30,10 +30,10 @@ const metrics: MetricKey[] = [
   "overall",
   "airQuality",
   "floodSusceptibility",
-  "drainProximity",
   "rainfall",
-  "estimatedNoise",
   "connectivity",
+  "transit",
+  "greenSpace",
 ];
 
 export function MapControls({ onReset, onHelp }: { onReset: () => void; onHelp: () => void }) {

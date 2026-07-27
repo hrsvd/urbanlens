@@ -4,16 +4,17 @@
 
 This project fits Vercel because all heavy geospatial preparation is complete before deployment.
 
-### 1. Prepare the artifact
+### 1. Prepare the artifacts
 
 ```bash
 npm ci
-npm run data:ingest
+# Ingest all localities (or ingest individually)
+npm run data:ingest:all
 npm test
 npm run build
 ```
 
-Review changes to `public/data/hsr-bootstrap.json`. Do not run ingestion from a Vercel function.
+Review changes to each `public/data/{localityId}-bootstrap.json`, including livability point counts. Do not run ingestion from a Vercel function. To refresh only the OSM-derived livability features without re-downloading, run `node scripts/augment-data.mjs --locality <id>` offline. See [docs/data-strategy.md](data-strategy.md) for the per-category refresh cadence.
 
 ### 2. Configure
 
@@ -33,20 +34,20 @@ Import the repository into Vercel, retain the Next.js preset, and use:
 - build: `npm run build`
 - output: managed by Next.js
 
-The checked-in GeoJSON is served through the local bootstrap API with long CDN cache headers. Dynamic cell metrics use 15-minute edge/server revalidation and tolerate partial upstream failure.
+All generated `public/data/*.json` files must be present in the deployment. The bootstrap API reads them at request time with a module-level in-process cache. Dynamic cell metrics use 15-minute edge/server revalidation and tolerate partial upstream failure.
 
 ## Static-data update workflow
 
 ```text
 manual or scheduled GitHub Action
       ↓
-npm ci && npm run data:ingest
+npm ci && npm run data:ingest:all   (or --locality <id> for targeted update)
       ↓
-validate counts, licenses, source metadata, and map screenshot
+validate counts, licenses, source metadata, map screenshot per locality
       ↓
 tests + production build
       ↓
-review artifact diff
+review artifact diffs
       ↓
 deploy
 ```
@@ -55,9 +56,9 @@ Overpass ingestion should be manual or infrequent and must respect public servic
 
 ## Scaling path
 
-The current 7.1 MB uncompressed artifact is appropriate for HSR-only MVP validation. Before adding another locality:
+The per-locality bootstrap JSON files are acceptable for multi-locality MVP validation. Before expanding further:
 
-1. produce PMTiles or vector tiles;
+1. produce PMTiles or vector tiles per locality;
 2. generalize geometry by zoom;
 3. move cell features and time series to Postgres/PostGIS;
 4. put static tiles in object storage/CDN;
@@ -70,14 +71,16 @@ After deployment:
 
 ```text
 GET /api/health
-GET /api/map/bootstrap
+GET /api/map/bootstrap?locality=hsr
+GET /api/map/bootstrap?locality=koramangala
 GET /api/cells/hsr-grid-14-21/metrics
 GET /api/search?q=park
 ```
 
 Then verify:
 
-- 3D building extrusion and WebGL context;
+- locality switcher is visible and switches correctly;
+- 3D building extrusion and WebGL context per locality;
 - pan, zoom, pitch, and rotate;
 - center-map cell selection;
 - dynamic provider fallback;
@@ -85,7 +88,7 @@ Then verify:
 - mobile bottom sheet;
 - browser console;
 - attribution visibility;
-- compressed bootstrap transfer size.
+- compressed bootstrap transfer size per locality.
 
 ## Licensing
 

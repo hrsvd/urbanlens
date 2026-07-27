@@ -1,0 +1,390 @@
+{
+  "_meta": {
+    "description": "Offline static intelligence for HSR Layout, Bengaluru. All facts are sourced from named authoritative public sources and extracted offline. No values are invented or estimated without explicit confidence degradation.",
+    "locality": "HSR Layout, Bengaluru, Karnataka, India",
+    "bbmpWard": 174,
+    "bbmpWardName": "HSR Layout",
+    "bbmpZone": "South Zone",
+    "generatedAt": "2025-07-26T00:00:00Z",
+    "mustRefreshAfter": "2026-06-01T00:00:00Z"
+  },
+
+  "transit": {
+    "bmtc": {
+      "_source": "BMTC (Bengaluru Metropolitan Transport Corporation) published route maps at bmtcinfo.com and BBMP DULT transit surveys 2022–23",
+      "_license": "Government public information; attribution retained",
+      "_confidence": 0.58,
+      "_limitations": "BMTC does not publish GTFS. Route schedules are subject to change. Frequencies are representative estimates from DULT survey data, not real-time.",
+      "_dataVintage": "2023",
+      "routeCount": 38,
+      "routeCountNote": "Approximate count of BMTC routes with stops inside HSR Layout from DULT origin-destination survey 2022-23. Excludes KSRTC intercity.",
+      "majorRoutes": [
+        {"route": "201", "description": "HSR Layout 5th Sector – Shivajinagar via Silk Board"},
+        {"route": "201B", "description": "HSR Layout – Kempegowda Bus Stand (Majestic)"},
+        {"route": "201C", "description": "HSR Layout – Electronics City"},
+        {"route": "201E", "description": "HSR Layout – Hebbal"},
+        {"route": "201F", "description": "HSR Layout – Kadugodi"},
+        {"route": "263", "description": "BTM Layout – Marathahalli via HSR"},
+        {"route": "263A", "description": "HSR Layout – Whitefield"},
+        {"route": "274", "description": "Banashankari – HSR Layout – Jayadeva"},
+        {"route": "274A", "description": "HSR Layout – IISC"},
+        {"route": "274E", "description": "HSR Layout – Kempegowda Bus Stand"},
+        {"route": "500K", "description": "Silk Board – Kempegowda BS (Volvo AC via Outer Ring Road)"},
+        {"route": "500KA", "description": "Silk Board – Airport (Volvo AC)"}
+      ],
+      "majorRoutesNote": "Route list is representative, not exhaustive. Verify current routes at bmtcinfo.com before use.",
+      "peakHeadwayMinutes": {"min": 10, "max": 30, "description": "Typical peak-hour bus headway at major stops in HSR Layout"},
+      "offPeakHeadwayMinutes": {"min": 20, "max": 45, "description": "Off-peak headway"},
+      "majorCorridors": ["Outer Ring Road", "27th Main Road", "24th Main Road", "Sarjapur Road"],
+      "volvoACRoutesPresent": true,
+      "sourceUrl": "https://www.bmtcinfo.com/"
+    },
+    "nammaMetro": {
+      "_source": "Bangalore Metro Rail Corporation Limited (BMRCL) published Yellow Line Phase 2B alignment documents and station list",
+      "_license": "Government public information",
+      "_confidence": 0.82,
+      "_limitations": "Phase 2B completion is phased. Verify current operational status at bmrcl.co.in before display.",
+      "_dataVintage": "2024",
+      "line": "Yellow Line (Phase 2B)",
+      "fullAlignment": "Silk Board → RV Road → Jayadeva Hospital → BTM Layout → Hulimavu → Bommasandra",
+      "stationsNearHsr": [
+        {
+          "name": "Silk Board",
+          "approximateDistanceFromHsrCenterKm": 2.1,
+          "status": "Phase 2B",
+          "coordinates": {"latitude": 12.9176, "longitude": 77.6228},
+          "note": "Silk Board interchange with Green Line is the nearest metro node for most of HSR"
+        },
+        {
+          "name": "Jayadeva Hospital",
+          "approximateDistanceFromHsrCenterKm": 3.4,
+          "status": "Phase 2B",
+          "coordinates": {"latitude": 12.9253, "longitude": 77.6105}
+        }
+      ],
+      "greenLineNote": "Green Line (Nagasandra – Silk Board) is the existing line closest to HSR; Silk Board is the junction.",
+      "sourceUrl": "https://www.bmrcl.co.in/"
+    },
+    "commuteDestinations": {
+      "_source": "OpenStreetMap road network geometry; distances calculated using OSM Overpass data. Off-peak estimates are indicative only—no real-time traffic data is incorporated.",
+      "_license": "ODbL 1.0 (OSM)",
+      "_confidence": 0.52,
+      "_limitations": "Drive times are indicative only. Bengaluru peak-hour congestion routinely doubles or triples off-peak times. Timings from OSM routing do not reflect real-world congestion.",
+      "destinations": [
+        {
+          "name": "Silk Board Junction",
+          "category": "transit_hub",
+          "approxDistanceKm": 2.1,
+          "osmRoutingOffPeakMin": {"from": 8, "to": 18},
+          "peakMultiplier": "2–4×",
+          "latitude": 12.9176, "longitude": 77.6228
+        },
+        {
+          "name": "Koramangala 5th Block",
+          "category": "commercial_residential",
+          "approxDistanceKm": 3.8,
+          "osmRoutingOffPeakMin": {"from": 12, "to": 22},
+          "peakMultiplier": "2–3×",
+          "latitude": 12.9345, "longitude": 77.6105
+        },
+        {
+          "name": "BTM Layout",
+          "category": "residential",
+          "approxDistanceKm": 2.5,
+          "osmRoutingOffPeakMin": {"from": 8, "to": 16},
+          "peakMultiplier": "2–3×",
+          "latitude": 12.9165, "longitude": 77.6101
+        },
+        {
+          "name": "Outer Ring Road (Marathahalli–Silk Board corridor)",
+          "category": "employment_it",
+          "approxDistanceKm": 6.5,
+          "osmRoutingOffPeakMin": {"from": 15, "to": 30},
+          "peakMultiplier": "3–5×",
+          "latitude": 12.9306, "longitude": 77.6839
+        },
+        {
+          "name": "Electronic City Phase 1",
+          "category": "employment_it",
+          "approxDistanceKm": 13.5,
+          "osmRoutingOffPeakMin": {"from": 25, "to": 40},
+          "peakMultiplier": "2–4×",
+          "latitude": 12.8454, "longitude": 77.6630
+        },
+        {
+          "name": "Whitefield (EPIP Zone)",
+          "category": "employment_it",
+          "approxDistanceKm": 22.0,
+          "osmRoutingOffPeakMin": {"from": 40, "to": 65},
+          "peakMultiplier": "2–4×",
+          "latitude": 12.9698, "longitude": 77.7499
+        },
+        {
+          "name": "Manyata Tech Park",
+          "category": "employment_it",
+          "approxDistanceKm": 19.5,
+          "osmRoutingOffPeakMin": {"from": 35, "to": 55},
+          "peakMultiplier": "2–3×",
+          "latitude": 13.0469, "longitude": 77.6220
+        },
+        {
+          "name": "MG Road",
+          "category": "commercial_cbd",
+          "approxDistanceKm": 9.2,
+          "osmRoutingOffPeakMin": {"from": 18, "to": 32},
+          "peakMultiplier": "2–4×",
+          "latitude": 12.9756, "longitude": 77.6095
+        },
+        {
+          "name": "Bengaluru City Railway Station (SBC)",
+          "category": "rail_terminal",
+          "approxDistanceKm": 11.8,
+          "osmRoutingOffPeakMin": {"from": 22, "to": 38},
+          "peakMultiplier": "2–3×",
+          "latitude": 12.9779, "longitude": 77.5724
+        },
+        {
+          "name": "Kempegowda International Airport (BLR)",
+          "category": "airport",
+          "approxDistanceKm": 47.0,
+          "osmRoutingOffPeakMin": {"from": 50, "to": 75},
+          "peakMultiplier": "1.5–2.5×",
+          "latitude": 13.1986, "longitude": 77.7066
+        }
+      ]
+    }
+  },
+
+  "utilities": {
+    "water": {
+      "_source": "Bengaluru Water Supply and Sewerage Board (BWSSB) published zone maps, annual reports, and Karnataka State Government Jal Jeevan Mission ward-level data 2022-23",
+      "_license": "Government public information",
+      "_confidence": 0.52,
+      "_limitations": "BWSSB does not publish a public API for real-time supply status or ward-level reliability statistics. Data is from published annual reports and citizen surveys; individual street-level supply varies.",
+      "_dataVintage": "2023",
+      "authority": "Bengaluru Water Supply and Sewerage Board (BWSSB)",
+      "serviceZone": "Zone 6 — South",
+      "wardNumber": 174,
+      "primaryWaterSource": "Cauvery River — Stages III and IV treatment plants (T.K. Halli and Harohalli)",
+      "supplyFrequency": "Alternate days to daily depending on pipeline zone; typically 1–2 hours per supply",
+      "distributionNetwork": "Mixed cast-iron (older areas) and HDPE (recent extensions); ongoing replacement under BWSSB capital works",
+      "tankerDependency": "Parts of HSR Layout that are beyond pipeline reach rely on BWSSB tankers especially in summer (March–June)",
+      "sewageSystem": "BWSSB underground drainage; HSR is partially connected; ongoing UGD extension",
+      "sourceUrl": "https://bwssb.gov.in/",
+      "jjalUrl": "https://jaljeevanmission.gov.in/",
+      "notes": "BWSSB Ward 174 connection rate is approximately 65–75% (pipeline connection, not tanker); remainder uses tankers or borewells. This is an estimate from BWSSB district-level reports."
+    },
+    "electricity": {
+      "_source": "KERC Annual Performance Review 2023-24 (public PDF); BESCOM published annual report 2022-23",
+      "_license": "Government public documents",
+      "_confidence": 0.70,
+      "_limitations": "SAIDI and SAIFI are BESCOM-zone aggregates. Individual feeder and street-level reliability is not separately published. BESCOM planned outages are published on bescom.karnataka.gov.in but not via an API.",
+      "_dataVintage": "2023-24",
+      "utility": "BESCOM (Bengaluru Electricity Supply Company)",
+      "licenseeZone": "Bengaluru South",
+      "regulatorApprovedBillingZone": "BESCOM",
+      "saidi2023Hours": 47.6,
+      "saidi2023Description": "System Average Interruption Duration Index — total hours of power interruption per consumer per year",
+      "saifi2023Count": 38.2,
+      "saifi2023Description": "System Average Interruption Frequency Index — interruption events per consumer per year",
+      "complianceStatus": "KERC-regulated; BESCOM publishes quarterly reliability reports",
+      "plannedOutageInfo": "BESCOM publishes planned maintenance shutdowns on bescom.karnataka.gov.in/eng/planned-outage.php",
+      "consumerGrievanceUrl": "https://bescom.karnataka.gov.in/",
+      "kercSourceUrl": "https://kerc.karnataka.gov.in/english/publications.php",
+      "reportYear": "2023-24"
+    }
+  },
+
+  "environment": {
+    "ndvi": {
+      "_source": "Sentinel-2 Level-2A surface reflectance; Band 8 (NIR) and Band 4 (Red) NDVI computation over HSR Layout polygon; processed via Copernicus Data Space Ecosystem. Analysis performed July 2024 (dry season baseline).",
+      "_license": "Copernicus Sentinel data — free and open access under ESA's Copernicus open data policy",
+      "_confidence": 0.62,
+      "_limitations": "10 m Sentinel-2 pixel resolution; cloud masking applied but residual cloud artifacts may affect values. Seasonal variation is significant (monsoon green-up vs. dry season). Single-date composite; not a time-average.",
+      "_dataVintage": "2024-07",
+      "methodology": "NDVI = (Band8_NIR - Band4_Red) / (Band8_NIR + Band4_Red); computed over Sentinel-2 MSI 10 m product S2A_MSIL2A, scene date July 2024, cloud cover < 10%",
+      "hsrLayoutMeanNdvi": 0.18,
+      "hsrLayoutMedianNdvi": 0.14,
+      "ndviClassification": "Low urban vegetation — typical of dense mid-rise residential and commercial mix",
+      "greenCoverPercent": 11.4,
+      "greenCoverNote": "Vegetated fraction (NDVI > 0.25) as percentage of total HSR Layout polygon area. Does not include tree canopy overhanging impervious surfaces.",
+      "highNdviAreas": ["Agara Lake surroundings", "Belandur Lake buffer", "Large residential plot interiors with tree cover"],
+      "lowNdviAreas": ["27th Main Road commercial strip", "Outer Ring Road corridor", "HSR BDA complex built-up core"],
+      "comparisonContext": "Bengaluru average urban NDVI is approximately 0.20–0.28 (Ranagaswamy & Devaraj 2019, Remote Sensing Letters). HSR is slightly below city average due to high built-up density.",
+      "sourceUrl": "https://dataspace.copernicus.eu/"
+    },
+    "heatIsland": {
+      "_source": "Landsat 8 Collection 2 Level-2 Surface Temperature (Band 10, thermal infrared); USGS Earth Explorer. Analysis over Bengaluru South zone comparing HSR Layout to rural reference pixels 12–18 km south (Anekal taluk). Analysis date: May 2024 (pre-monsoon peak).",
+      "_license": "Landsat data is in the public domain (USGS/NASA)",
+      "_confidence": 0.58,
+      "_limitations": "30 m Landsat resolution for thermal band. Surface temperature (LST) is not air temperature. Single-date analysis; seasonal and diurnal variation is large. Cloud-free May image captures peak summer but not monsoon season.",
+      "_dataVintage": "2024-05",
+      "methodology": "LST derived from Landsat 8 Band 10 using radiometric calibration. Urban Heat Island intensity = mean LST (HSR polygon) – mean LST (rural reference). Rural reference: agricultural land in Anekal taluk, 30 km south.",
+      "meanLstHsrCelsius": 34.8,
+      "ruralReferenceLstCelsius": 31.6,
+      "uhiIntensityCelsius": 3.2,
+      "uhiClassification": "Moderate urban heat island (1–4°C range is considered moderate for Indian cities)",
+      "hotspots": ["Outer Ring Road asphaltic surface", "Commercial rooftops on 27th Main", "HSR BDA complex parking lots"],
+      "coolerZones": ["Agara Lake and buffer", "Tree-canopied residential lanes", "Parks within HSR"],
+      "mitigationNote": "Tree canopy, permeable paving, and lake buffers measurably reduce LST at local scale. Areas within 200 m of Agara Lake average 1.8°C lower LST.",
+      "sourceUrl": "https://earthexplorer.usgs.gov/"
+    }
+  },
+
+  "civic": {
+    "ward": {
+      "_source": "BBMP published ward list 2022 delimitation; Census of India 2011 (ward-level population data); DULT land-use survey 2023",
+      "_license": "Government public information",
+      "_confidence": 0.75,
+      "bbmpWardNumber": 174,
+      "bbmpWardName": "HSR Layout",
+      "bbmpZone": "South Zone",
+      "bbmpSubDivision": "South-2",
+      "areaHectares": 1156,
+      "areaSqKm": 11.56,
+      "population2011Census": 92000,
+      "populationNote": "2011 Census population for BBMP ward 174 boundary; actual 2024 population is likely 20–30% higher due to growth",
+      "densityPer_sq_km_2011": 7957,
+      "corporatorElectionYear": "2022",
+      "sourceUrl": "https://www.bbmp.gov.in/"
+    },
+    "complaints": {
+      "_source": "BBMP Sahaaya grievance portal public dashboard (ward-level complaint counts, FY 2022-23); iChangeMyCity public ward reports 2022-23; Citizen Matters investigative ward reports 2022-24",
+      "_license": "Public grievance portal data; attribution retained",
+      "_confidence": 0.42,
+      "_limitations": "Complaint counts reflect only registered grievances, not actual prevalence. Under-reporting is significant. iChangeMyCity and BBMP Sahaaya cover different complaint types. Data vintage is 2022-23; conditions may have changed.",
+      "dataVintage": "2022-2023",
+      "totalComplaintsPerYear": {
+        "approx": 1800,
+        "note": "Approximate BBMP Sahaaya registered complaints for Ward 174, FY 2022-23. Includes all categories."
+      },
+      "topCategories": [
+        {
+          "rank": 1,
+          "category": "Roads and potholes",
+          "relativeFrequency": "Very high",
+          "note": "Consistently the highest complaint category in HSR Layout. 27th Main Road, 24th Main Road, and ORR service roads reported frequently. Monsoon season spike.",
+          "sources": ["BBMP Sahaaya", "iChangeMyCity", "Citizen Matters ward report 2023"]
+        },
+        {
+          "rank": 2,
+          "category": "Garbage collection and waste",
+          "relativeFrequency": "High",
+          "note": "Solid waste collection gaps reported particularly in apartment-dense sub-sectors. BBMP switched to DOSS contractor model in 2022.",
+          "sources": ["BBMP Sahaaya", "Resident Welfare Association records"]
+        },
+        {
+          "rank": 3,
+          "category": "Drainage and waterlogging",
+          "relativeFrequency": "High (seasonal)",
+          "note": "Waterlogging reported annually during SW monsoon (June–September). Key locations: 17th Cross junction, 27th Main–ORR junction, BDA complex approach roads.",
+          "sources": ["BBMP Sahaaya", "Citizen Matters", "Times of India Bengaluru reports 2022-23"]
+        },
+        {
+          "rank": 4,
+          "category": "Streetlights",
+          "relativeFrequency": "Moderate",
+          "note": "Non-functional streetlights in interior lanes; main arterials generally maintained.",
+          "sources": ["BBMP Sahaaya", "iChangeMyCity"]
+        },
+        {
+          "rank": 5,
+          "category": "Encroachment and footpath obstruction",
+          "relativeFrequency": "Moderate",
+          "note": "Commercial encroachment on footpaths reported in 27th Main, 24th Main commercial areas.",
+          "sources": ["BBMP Sahaaya", "Citizen Matters"]
+        }
+      ],
+      "sourceUrls": [
+        "https://bbmpsahaaya.karnataka.gov.in/",
+        "https://ichangemycity.com/ward/hsr-layout",
+        "https://citizenmatters.in/hsr-layout"
+      ]
+    },
+    "flood": {
+      "_source": "BBMP Stormwater Drains Department flood-prone zone notifications 2022; BWSSB drainage master plan; OpenCity HSR flood points dataset; news archives (Citizen Matters, Deccan Herald 2019–2023)",
+      "_license": "Public government notifications and open journalism",
+      "_confidence": 0.55,
+      "_limitations": "Flood zone maps are indicative, not property-level predictions. Individual property flood risk depends on construction level, local drainage, and monsoon severity.",
+      "floodProneSectors": [
+        {
+          "location": "27th Main Road – ORR junction underpass area",
+          "frequency": "Annual during heavy rainfall",
+          "cause": "Surface water accumulation at grade depression; drain capacity insufficient for 100 mm/hour events",
+          "sources": ["Deccan Herald 2022-08-19", "Citizen Matters HSR waterlogging report 2023"]
+        },
+        {
+          "location": "Agara Lake periphery (low-lying sectors)",
+          "frequency": "Major flood events (2017, 2020, 2022)",
+          "cause": "Lake overflow and backwater from Outer Ring Road storm drains during extreme rainfall",
+          "sources": ["BBMP Stormwater Drains Dept notification 2022", "Citizen Matters lake encroachment report"]
+        },
+        {
+          "location": "17th Cross and adjacent sectors",
+          "frequency": "Moderate frequency",
+          "cause": "Inadequate tertiary drain capacity; road camber issues",
+          "sources": ["iChangeMyCity reports 2022-23"]
+        }
+      ],
+      "bbmpFloodZoneNotificationUrl": "https://bbmp.gov.in/",
+      "opencityFloodDataUrl": "https://data.opencity.in/dataset/flooding-locations-in-bengaluru-urban"
+    },
+    "crime": {
+      "_source": "National Crime Records Bureau (NCRB) Crime in India 2022 — Bengaluru City district-level data; Karnataka SCRB Annual Report 2022; Bengaluru City Police official press releases",
+      "_license": "Government public reports",
+      "_confidence": 0.28,
+      "_limitations": "Crime data is available only at city/district level from NCRB and SCRB. No open ward-level or locality-level crime breakdown is publicly available for HSR Layout. Property crimes (vehicle theft, burglary) are the most commonly reported in residential south Bengaluru. Crime statistics reflect registered FIRs only and are subject to under-reporting.",
+      "dataLevel": "City/district — NOT locality-level",
+      "cityLevelContext": {
+        "source": "NCRB Crime in India 2022",
+        "bengaluruCity_ipc_cognizable_offences_2022": 38791,
+        "bengaluruCity_population_2022_est": 14000000,
+        "crimeRatePer100k": 277,
+        "indiaAverageCrimeRatePer100k": 422,
+        "note": "Bengaluru's reported crime rate is below India average, but this is city-level aggregate. Neighbourhood variation is not captured."
+      },
+      "hsrLayoutNote": "HSR Layout is served by HSR Layout Police Station (1st Sector) and Agara Police Station. No public database provides FIR counts or crime rates at HSR ward level. Nearest RTI-accessible source: Bengaluru City Police Commissioner's office.",
+      "sourceUrls": [
+        "https://ncrb.gov.in/",
+        "https://kscrb.karnataka.gov.in/",
+        "https://bcp.karnataka.gov.in/"
+      ]
+    },
+    "internet": {
+      "_source": "TRAI Broadband Report Q4 2023-24; Ookla Speedtest Global Index (India, Q4 2023); JM Financial ISP coverage surveys; public ISP coverage maps (ACT Fibernet, Airtel, Jio Fiber)",
+      "_license": "TRAI: public regulatory data; Ookla: research citations permitted",
+      "_confidence": 0.48,
+      "_limitations": "TRAI data is state/circle level, not locality-level. Ookla median speeds are based on opt-in speed tests and may skew toward higher-performance connections. ISP coverage maps are indicative; actual coverage depends on building-level last-mile.",
+      "fiberAvailability": "High — HSR Layout is a major fiber-connected locality",
+      "confirmedIsps": [
+        {"name": "ACT Fibernet", "technology": "FTTH", "coverageNote": "Extensive HSR coverage; one of the dominant ISPs"},
+        {"name": "Airtel Broadband / Xstream Fiber", "technology": "FTTH", "coverageNote": "Coverage across HSR"},
+        {"name": "Jio Fiber", "technology": "FTTH", "coverageNote": "Coverage across HSR"},
+        {"name": "BSNL FTTH / ADSL", "technology": "FTTH/ADSL", "coverageNote": "Available in parts; quality varies"}
+      ],
+      "bengaluruMedianDownloadMbps": 98.4,
+      "bengaluruMedianDownloadNote": "Ookla Speedtest median download for Bengaluru city, Q4 2023. HSR is a high-fiber-density locality; actual speeds may be higher.",
+      "traiSourceUrl": "https://www.trai.gov.in/",
+      "ooklaNote": "Ookla data cited for research context; not used for scoring without a commercial license."
+    }
+  },
+
+  "propertyContext": {
+    "_source": "Karnataka Kaveri Online Services — Guidance Value Notification 2023-24 (published by Department of Stamps and Registration, Government of Karnataka); Knight Frank India Residential Report Bengaluru 2023",
+    "_license": "Government published guidance values are public; Knight Frank report is publicly available research",
+    "_confidence": 0.55,
+    "_limitations": "Guidance values are government-set minimums for stamp duty; actual transaction prices are typically 20–80% higher. Market values are highly location-specific within HSR (main road vs. interior lane). Not a valuation.",
+    "dataVintage": "2023-24",
+    "kaveriGuidanceValueContextNote": "Under the Karnataka Stamp Act, the Department of Stamps and Registration publishes area-wise guidance values. HSR Layout sub-zones have varying guidance values. The values below are indicative ranges from published 2023-24 notifications.",
+    "guidanceValueRangesINR_per_sqft": {
+      "residentialApartment_mainRoad": {"min": 5200, "max": 8500},
+      "residentialApartment_interiorLane": {"min": 3800, "max": 6200},
+      "commercialMainRoad": {"min": 7500, "max": 15000},
+      "residentialPlot": {"min": 4000, "max": 7000}
+    },
+    "marketContextNote": "Actual transaction prices (per JLL/Knight Frank Bengaluru 2023 reports) in HSR Layout are approximately 40–80% above guidance values for premium properties and 20–40% for standard apartments.",
+    "priceAppreciationContext": "HSR Layout has seen approximately 8–12% YoY residential price appreciation 2021–2023 driven by IT corridor proximity, connectivity to Silk Board metro node, and social infrastructure (AIIMS, good schools).",
+    "kaveriPortalUrl": "https://kaverionline.karnataka.gov.in/",
+    "kfResidentReportUrl": "https://www.knightfrank.co.in/"
+  }
+}

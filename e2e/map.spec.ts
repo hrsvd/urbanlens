@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 async function waitForMap(page: import("@playwright/test").Page) {
-  await expect(page.getByLabel("Interactive 3D map of HSR Layout")).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator(".maplibregl-canvas")).toBeVisible({ timeout: 25_000 });
   await expect(page.locator(".map-loader")).toBeHidden({ timeout: 15_000 });
 }
 
-test("homepage loads the real HSR map artifact", async ({ page }) => {
+test("homepage loads the real map artifact", async ({ page }) => {
   await page.goto("/");
   await waitForMap(page);
-  await expect(page.getByLabel("HSR Intelligence Map")).toBeVisible();
+  // Brand link in map-experience
+  await expect(page.locator("a.brand")).toBeVisible();
   await expect(page.getByLabel("Toggle 3d buildings")).toBeVisible();
 });
 
@@ -20,18 +21,23 @@ test("selecting a geographic point opens cell evidence", async ({ page }) => {
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("Map canvas has no bounds");
   await page.mouse.click(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.54);
-  await expect(page.getByLabel("Selected cell intelligence")).toBeVisible();
-  await expect(page.getByText("OVERALL CELL SIGNAL")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Evidence signals")).toBeVisible();
+  const panel = page.getByLabel("Selected cell intelligence");
+  await expect(panel).toBeVisible();
+  // Panel header is always present once a cell is selected
+  await expect(page.locator(".panel-topbar")).toBeVisible();
+  // Score section appears once dynamic metrics load
+  await expect(page.locator(".score-hero")).toBeVisible({ timeout: 20_000 });
+  // Evidence row link is present once metrics load
   const evidenceLink = page.locator(".evidence-row a").first();
-  await evidenceLink.scrollIntoViewIfNeeded();
-  await expect(evidenceLink).toBeVisible();
+  await expect(evidenceLink).toBeVisible({ timeout: 20_000 });
 });
 
-test("local search focuses a named HSR place and clarifies cell context", async ({ page }) => {
+test("local search focuses a named place and clarifies cell context", async ({ page }) => {
   await page.goto("/");
   await waitForMap(page);
-  const input = page.getByLabel("Search HSR streets and places");
+  // Use the search bar form input directly
+  const input = page.locator(".search-bar input");
+  await expect(input).toBeVisible();
   await input.fill("park");
   const result = page.locator(".search-results > button").first();
   await expect(result).toBeVisible();
@@ -57,7 +63,7 @@ test("transparency pages load", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "An indicator, not a verdict." })).toBeVisible();
   await page.goto("/data-sources");
   await expect(page.getByRole("heading", { name: "Evidence has an address." })).toBeVisible();
-  await expect(page.getByText("OpenStreetMap contributors", { exact: true })).toBeVisible();
+  await expect(page.getByText("OpenStreetMap contributors", { exact: true }).first()).toBeVisible();
 });
 
 test("mobile selection uses a bottom sheet", async ({ page }, testInfo) => {

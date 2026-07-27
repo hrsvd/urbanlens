@@ -13,8 +13,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "data:ingest": "node scripts/ingest-data.mjs",
-    "data:osm": "node scripts/ingest-data.mjs --osm-only",
-    "data:environment": "node scripts/ingest-data.mjs --environment-only"
+    "data:ingest:all": "node scripts/ingest-all.mjs",
+    "data:augment": "node scripts/augment-data.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.9",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getBootstrap, getCell } from "@/server/data";
+import { getCell, getStaticIntelligence, localityForCell } from "@/server/data";
+import { getBootstrap } from "@/server/data";
 import { fetchAirQuality, fetchWeather } from "@/server/external";
 import { buildCellMetrics } from "@/server/metrics";
 
@@ -10,8 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ cellId: string }> },
 ) {
   const { cellId } = await params;
-  const [cell, bootstrap] = await Promise.all([getCell(cellId), getBootstrap()]);
-  if (!cell) return NextResponse.json({ error: "Unknown HSR analysis cell." }, { status: 404 });
+  const localityId = localityForCell(cellId);
+
+  const [cell, bootstrap, intelligence] = await Promise.all([
+    getCell(cellId),
+    getBootstrap(localityId),
+    getStaticIntelligence(localityId),
+  ]);
+  if (!cell) return NextResponse.json({ error: "Unknown analysis cell." }, { status: 404 });
 
   const { centerLatitude, centerLongitude } = cell.properties;
   const [airResult, weatherResult] = await Promise.allSettled([
@@ -20,12 +27,21 @@ export async function GET(
   ]);
   const air = airResult.status === "fulfilled" ? airResult.value : null;
   const weather = weatherResult.status === "fulfilled" ? weatherResult.value : null;
-  const response = buildCellMetrics(cell, bootstrap.meta.generatedAt, air, weather);
+  const response = await buildCellMetrics(
+    cell,
+    bootstrap.meta.generatedAt,
+    air,
+    weather,
+    intelligence,
+    centerLatitude,
+    centerLongitude,
+  );
 
   return NextResponse.json(response, {
     headers: {
       "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600",
       "X-Data-Completeness": air && weather ? "complete" : "partial",
+      "X-Locality": localityId,
     },
   });
 }

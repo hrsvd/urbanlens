@@ -9,5 +9,6 @@ test-results/
 .env.local
 .env.*.local
 scripts/cache/
+tsconfig.tsbuildinfo
 *.log
 .DS_Store

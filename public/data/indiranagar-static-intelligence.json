@@ -1,0 +1,52 @@
+{
+  "_meta": {
+    "description": "Offline static intelligence for Indiranagar, Bengaluru. This file is a stub — static intelligence has not yet been collected for this locality. All sections are marked unavailable.",
+    "locality": "Indiranagar, Bengaluru, Karnataka, India",
+    "bbmpWard": null,
+    "bbmpWardName": null,
+    "bbmpZone": null,
+    "generatedAt": "2026-07-27T00:00:00Z",
+    "mustRefreshAfter": "2027-06-01T00:00:00Z"
+  },
+
+  "transit": {
+    "_available": false,
+    "_reason": "Static transit intelligence not yet collected for this locality. BMTC route data requires manual research per locality.",
+    "bmtc": null,
+    "nammaMetro": null
+  },
+
+  "utilities": {
+    "_available": false,
+    "_reason": "BWSSB water supply zone data not yet collected for this locality.",
+    "waterSupply": null,
+    "electricity": null
+  },
+
+  "environment": {
+    "_available": false,
+    "_reason": "Satellite-derived NDVI and UHI analysis not yet collected for this locality.",
+    "ndvi": null,
+    "heatIsland": null
+  },
+
+  "civic": {
+    "_available": false,
+    "_reason": "Ward-level BBMP civic complaint data not yet collected for this locality.",
+    "ward": null,
+    "complaints": null
+  },
+
+  "propertyContext": {
+    "_available": false,
+    "_reason": "Property market context not available. No legitimate open dataset accepted.",
+    "rentalMarket": null,
+    "crime": {
+      "_source": "NCRB Crime in India 2022 — Bengaluru City district-level statistics",
+      "_license": "Government public data",
+      "_confidence": 0.15,
+      "_limitations": "City/district aggregate. No locality-level breakdown exists.",
+      "localityNote": "Karnataka crime data (NCRB/SCRB) is published at city/district level. No ward or locality breakdown is publicly available. A city-wide rate must not be treated as a cell-level rate."
+    }
+  }
+}

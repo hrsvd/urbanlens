@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Box, Database, Radio, TriangleAlert } from "lucide-react";
-import { HSR_CENTER } from "@/lib/constants";
+import { Database, LayoutGrid, TriangleAlert } from "lucide-react";
+import { LOCALITIES } from "@/lib/constants";
+import type { LocalityId } from "@/lib/constants";
 import { haversineDistanceMeters } from "@/lib/geo";
 import { useMapStore } from "@/lib/store";
 import type { AnalysisCell, MapBootstrap, SearchItem } from "@/lib/types";
 import { HelpDialog } from "./help-dialog";
 import { IntelligencePanel } from "./intelligence-panel";
+import { LocalitySwitcher } from "./locality-switcher";
 import { MapCanvas, type MapHandle } from "./map-canvas";
 import { MapControls } from "./map-controls";
 import { MapLegend } from "./map-legend";
@@ -22,17 +24,35 @@ async function getJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+// Localities for which a bootstrap file exists are shown in the switcher.
+// This list is determined by attempting to load each bootstrap at runtime —
+// but for the initial render we optimistically show all registered localities
+// and let the map canvas surface an error only if the file is truly missing.
+const ALL_LOCALITY_IDS = Object.keys(LOCALITIES) as LocalityId[];
+
 export function MapExperience() {
   const mapRef = useRef<MapHandle>(null);
   const [mapReady, setMapReady] = useState(false);
   const [loaderVisible, setLoaderVisible] = useState(true);
   const [progress, setProgress] = useState(12);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  const activeLocality = useMapStore((state) => state.activeLocality);
   const selectedCellId = useMapStore((state) => state.selectedCellId);
+  const localityConfig = LOCALITIES[activeLocality];
+
+  // Reset loader state during render when locality changes (derived state pattern).
+  const [snapshotLocality, setSnapshotLocality] = useState(activeLocality);
+  if (snapshotLocality !== activeLocality) {
+    setSnapshotLocality(activeLocality);
+    setMapReady(false);
+    setLoaderVisible(true);
+    setProgress(12);
+  }
 
   const bootstrapQuery = useQuery({
-    queryKey: ["map-bootstrap"],
-    queryFn: () => getJson<MapBootstrap>("/api/map/bootstrap"),
+    queryKey: ["map-bootstrap", activeLocality],
+    queryFn: () => getJson<MapBootstrap>(`/api/map/bootstrap?locality=${activeLocality}`),
     staleTime: Infinity,
   });
 
@@ -53,7 +73,7 @@ export function MapExperience() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        document.getElementById("hsr-search")?.focus();
+        document.getElementById("ul-search")?.focus();
       }
       if (event.key === "Escape") setHelpOpen(false);
     };
@@ -63,16 +83,17 @@ export function MapExperience() {
 
   const centerCellId = useMemo(() => {
     if (!bootstrapQuery.data) return null;
+    const center = localityConfig.center;
     return bootstrapQuery.data.grid.features.reduce((closest, cell) => {
       const distance = haversineDistanceMeters(
-        HSR_CENTER,
+        center,
         { latitude: cell.properties.centerLatitude, longitude: cell.properties.centerLongitude },
       );
       return !closest || distance < closest.distance
         ? { id: cell.properties.id, distance }
         : closest;
     }, null as { id: string; distance: number } | null)?.id ?? null;
-  }, [bootstrapQuery.data]);
+  }, [bootstrapQuery.data, localityConfig.center]);
 
   const regionalQuery = useQuery({
     queryKey: ["cell-metrics", centerCellId],
@@ -96,8 +117,11 @@ export function MapExperience() {
       <main className="map-fatal">
         <TriangleAlert aria-hidden="true" />
         <span>LOCAL MAP ARTIFACT UNAVAILABLE</span>
-        <h1>HSR could not be assembled.</h1>
-        <p>Run <code>npm run data:ingest</code>, then restart the development server. No synthetic map has been substituted.</p>
+        <h1>{localityConfig.displayName} could not be loaded.</h1>
+        <p>
+          Run <code>npm run data:ingest -- --locality {activeLocality}</code>, then restart the development server.
+          No synthetic map has been substituted.
+        </p>
       </main>
     );
   }
@@ -112,6 +136,8 @@ export function MapExperience() {
         <MapCanvas
           ref={mapRef}
           data={bootstrapQuery.data}
+          localityCenter={localityConfig.center}
+          localityName={localityConfig.displayName}
           selectedCell={selectedQuery.data ?? null}
           regionalScores={{
             airQuality: regionalQuery.data?.metrics.airQuality.ratingOutOf10 ?? null,
@@ -122,9 +148,9 @@ export function MapExperience() {
       )}
 
       <header className="map-header">
-        <Link className="brand map-brand" href="/" aria-label="HSR Intelligence Map">
-          <span className="brand-mark"><Box aria-hidden="true" /></span>
-          <span><strong>HSR</strong><em>INTELLIGENCE MAP</em></span>
+        <Link className="brand map-brand" href="/" aria-label="UrbanLens Bengaluru">
+          <span className="brand-mark"><LayoutGrid aria-hidden="true" /></span>
+          <span><strong>URBAN</strong><em>LENS</em></span>
         </Link>
         <SearchBar onSelect={onSearchSelect} />
         <nav aria-label="Project pages">
@@ -145,9 +171,12 @@ export function MapExperience() {
           <i />
           <span><strong>{bootstrapQuery.data.meta.counts.gridCells}</strong> cells</span>
           <i />
-          <span className="scope"><Radio aria-hidden="true" /> HSR ONLY</span>
+          <span className="scope">{localityConfig.displayName}</span>
         </div>
       )}
+
+      {/* Locality switcher — body of the screen, not the header */}
+      <LocalitySwitcher availableLocalities={ALL_LOCALITY_IDS} />
 
       <MapControls onReset={() => mapRef.current?.reset()} onHelp={() => setHelpOpen(true)} />
       <MapLegend />

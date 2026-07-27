@@ -11,7 +11,7 @@ export function MapLegend() {
     <aside className="map-legend" aria-label="Map score legend">
       <header><span>Surface signal</span><strong>{METRIC_LABELS[activeMetric]}</strong></header>
       <div className="legend-scale"><i /><i /><i /><i /><i /></div>
-      <div className="legend-labels"><span>Higher observed risk</span><span>Lower</span></div>
+      <div className="legend-labels"><span>1 · adverse / low access</span><span>10 · favourable</span></div>
       {isRegional && <p>Uniform across HSR at the provider&apos;s regional model resolution.</p>}
       <footer><b /> Unknown or unavailable</footer>
     </aside>

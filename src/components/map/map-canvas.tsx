@@ -4,6 +4,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -12,7 +13,8 @@ import maplibregl, {
   type Map as MapLibreMap,
   type Marker,
 } from "maplibre-gl";
-import { HSR_CENTER } from "@/lib/constants";
+import { CELL_OVERLAY_OPACITY } from "@/lib/constants";
+import { NEUTRAL_SCORE_COLOR, SCORE_COLOR_STOPS, lighten, scoreToColor } from "@/lib/color";
 import { coordinateToCell } from "@/lib/geo";
 import { useMapStore } from "@/lib/store";
 import type { AnalysisCell, MapBootstrap, SearchItem } from "@/lib/types";
@@ -24,19 +26,14 @@ export type MapHandle = {
 
 type MapCanvasProps = {
   data: MapBootstrap;
+  localityCenter: { latitude: number; longitude: number };
+  localityName: string;
   selectedCell: AnalysisCell | null;
   regionalScores?: { airQuality: number | null; rainfall: number | null };
   onReady?: () => void;
 };
 
-const INITIAL_CAMERA = {
-  center: [HSR_CENTER.longitude, HSR_CENTER.latitude] as [number, number],
-  zoom: 14.35,
-  pitch: 58,
-  bearing: -24,
-};
-
-const HEAT_PROPERTY = {
+const HEAT_PROPERTY: Record<string, string> = {
   overall: "heatScoreOverall",
   airQuality: "heatScoreAir",
   floodSusceptibility: "heatScoreFlood",
@@ -44,35 +41,30 @@ const HEAT_PROPERTY = {
   rainfall: "heatScoreRainfall",
   estimatedNoise: "heatScoreNoise",
   connectivity: "heatScoreConnectivity",
-} as const;
+  education: "heatScoreEducation",
+  healthcare: "heatScoreHealthcare",
+  transit: "heatScoreTransit",
+  dailyNeeds: "heatScoreDailyNeeds",
+  greenSpace: "heatScoreGreenSpace",
+  safetyProxy: "heatScoreSafety",
+};
 
 function heatExpression(property: string) {
   return [
     "case",
-    ["!", ["has", property]], "#607084",
-    ["==", ["get", property], null], "#607084",
+    ["!", ["has", property]], NEUTRAL_SCORE_COLOR,
+    ["==", ["get", property], null], NEUTRAL_SCORE_COLOR,
     [
       "interpolate",
       ["linear"],
       ["to-number", ["get", property]],
-      0, "#b65f64",
-      3, "#bf6f64",
-      5, "#c99b66",
-      7, "#8cac80",
-      10, "#b8dfc5",
+      ...SCORE_COLOR_STOPS.flat(),
     ],
   ] as maplibregl.ExpressionSpecification;
 }
 
-function selectedColor(cell: AnalysisCell | null) {
-  if (!cell || cell.riskLevel === "unknown") return "#91b7cf";
-  if (cell.riskLevel === "low") return "#a8d7b9";
-  if (cell.riskLevel === "moderate") return "#d5b777";
-  return "#d88f8b";
-}
-
 export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanvas(
-  { data, selectedCell, regionalScores, onReady },
+  { data, localityCenter, localityName, selectedCell, regionalScores, onReady },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,9 +76,16 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
   const layers = useMapStore((state) => state.layers);
   const activeMetric = useMapStore((state) => state.activeMetric);
 
+  const initialCamera = useMemo(() => ({
+    center: [localityCenter.longitude, localityCenter.latitude] as [number, number],
+    zoom: 14.35,
+    pitch: 58,
+    bearing: -24,
+  }), [localityCenter.latitude, localityCenter.longitude]);
+
   useImperativeHandle(ref, () => ({
     reset() {
-      mapRef.current?.easeTo({ ...INITIAL_CAMERA, duration: 1500 });
+      mapRef.current?.easeTo({ ...initialCamera, duration: 1500 });
     },
     focus(item) {
       const cell = coordinateToCell(item.longitude, item.latitude, data.grid);
@@ -102,7 +101,7 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         essential: true,
       });
     },
-  }), [data.grid, setSelectedCell]);
+  }), [data.grid, setSelectedCell, initialCamera]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -114,7 +113,7 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         sources: {},
         layers: [{ id: "space", type: "background", paint: { "background-color": "#040808" } }],
       },
-      ...INITIAL_CAMERA,
+      ...initialCamera,
       minZoom: 12.8,
       maxZoom: 19,
       maxPitch: 72,
@@ -135,6 +134,10 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
       map.addSource("flood-points", { type: "geojson", data: data.floodPoints });
       map.addSource("grid", { type: "geojson", data: data.grid });
       map.addSource("selected-cell", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("hover-cell", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
@@ -179,7 +182,7 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         layout: { visibility: "none" },
         paint: {
           "fill-color": heatExpression(HEAT_PROPERTY.overall),
-          "fill-opacity": 0.24,
+          "fill-opacity": 0.34,
           "fill-outline-color": "rgba(218, 236, 226, 0.12)",
         },
       });
@@ -188,10 +191,12 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         type: "fill-extrusion",
         source: "selected-cell",
         paint: {
-          "fill-extrusion-color": "#91b7cf",
+          // Colour reflects the cell's composite score (red↔green); kept
+          // semi-transparent so buildings/roads/labels stay legible through it.
+          "fill-extrusion-color": NEUTRAL_SCORE_COLOR,
           "fill-extrusion-base": 0,
-          "fill-extrusion-height": 10,
-          "fill-extrusion-opacity": 0.18,
+          "fill-extrusion-height": 14,
+          "fill-extrusion-opacity": CELL_OVERLAY_OPACITY,
           "fill-extrusion-vertical-gradient": true,
         },
       });
@@ -303,17 +308,29 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         minzoom: 13.4,
         layout: { visibility: "visible" },
         paint: {
+          // Apartment footprints get a distinct warm tint; other buildings shade
+          // from dark low-rise to lighter high-rise for stronger height contrast.
           "fill-extrusion-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "height"],
-            6, "#405552",
-            16, "#607771",
-            32, "#8c9d92",
+            "case",
+            ["==", ["get", "class"], "apartments"],
+            [
+              "interpolate", ["linear"], ["coalesce", ["get", "height"], 10],
+              10, "#5b5a54",
+              24, "#7d7666",
+              48, "#a99a7f",
+            ],
+            [
+              "interpolate", ["linear"], ["coalesce", ["get", "height"], 10],
+              6, "#2f4148",
+              14, "#465f63",
+              26, "#6c8781",
+              48, "#9fb6a8",
+            ],
           ],
           "fill-extrusion-base": 0,
-          "fill-extrusion-height": ["coalesce", ["get", "height"], 10],
-          "fill-extrusion-opacity": 0.88,
+          // Slight vertical exaggeration sharpens the skyline read on a dark scene.
+          "fill-extrusion-height": ["*", ["coalesce", ["get", "height"], 10], 1.12],
+          "fill-extrusion-opacity": 0.93,
           "fill-extrusion-vertical-gradient": true,
         },
       });
@@ -331,14 +348,26 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
         },
       });
       map.addLayer({
+        id: "hover-fill",
+        type: "fill",
+        source: "hover-cell",
+        paint: {
+          "fill-color": "#dff3ea",
+          "fill-opacity": 0.08,
+          "fill-outline-color": "rgba(223, 243, 234, 0.4)",
+        },
+      });
+      map.addLayer({
         id: "selected-outline",
         type: "line",
         source: "selected-cell",
         paint: {
-          "line-color": "#d7f5e7",
-          "line-width": 2,
-          "line-opacity": 0.88,
-          "line-blur": 0.4,
+          // Bright, near-constant edge keeps the selected cell separable from the
+          // heatmap surface even when the fill colour sits mid-scale.
+          "line-color": "#f2fbf5",
+          "line-width": 2.6,
+          "line-opacity": 0.95,
+          "line-blur": 0.3,
         },
       });
 
@@ -372,10 +401,22 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
           essential: true,
         });
       });
+      let hoveredCellId: string | null = null;
       map.on("mousemove", (event) => {
-        map.getCanvas().style.cursor = coordinateToCell(event.lngLat.lng, event.lngLat.lat, data.grid)
-          ? "crosshair"
-          : "grab";
+        const cell = coordinateToCell(event.lngLat.lng, event.lngLat.lat, data.grid);
+        map.getCanvas().style.cursor = cell ? "crosshair" : "grab";
+        const nextId = cell?.properties.id ?? null;
+        if (nextId === hoveredCellId) return;
+        hoveredCellId = nextId;
+        const hoverSource = map.getSource("hover-cell") as GeoJSONSource | undefined;
+        hoverSource?.setData({ type: "FeatureCollection", features: cell ? [cell] : [] });
+      });
+      map.on("mouseout", () => {
+        hoveredCellId = null;
+        (map.getSource("hover-cell") as GeoJSONSource | undefined)?.setData({
+          type: "FeatureCollection",
+          features: [],
+        });
       });
 
       setMapReady(true);
@@ -388,7 +429,7 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
       map.remove();
       mapRef.current = null;
     };
-  }, [data, onReady, setSelectedCell]);
+  }, [data, initialCamera, onReady, setSelectedCell]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -399,9 +440,11 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
       type: "FeatureCollection",
       features: cell ? [cell] : [],
     });
-    const color = selectedColor(selectedCell);
+    // Diverging red↔green fill by composite score; a lightened tint glows at the
+    // base while the bright outline stays constant for separability.
+    const color = scoreToColor(selectedCell?.overallScore ?? null);
     map.setPaintProperty("selected-volume", "fill-extrusion-color", color);
-    map.setPaintProperty("selected-outline", "line-color", color);
+    map.setPaintProperty("selected-outline", "line-color", lighten(color, 0.72));
   }, [data.grid, mapReady, selectedCell, selectedCellId]);
 
   useEffect(() => {
@@ -460,7 +503,7 @@ export const MapCanvas = forwardRef<MapHandle, MapCanvasProps>(function MapCanva
 
   return (
     <div className="map-canvas-wrap">
-      <div ref={containerRef} className="map-canvas" aria-label="Interactive 3D map of HSR Layout" />
+      <div ref={containerRef} className="map-canvas" aria-label={`Interactive 3D map of ${localityName}`} />
       <div className="map-vignette" aria-hidden="true" />
       <div className="map-attribution">
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">

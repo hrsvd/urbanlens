@@ -1,23 +1,60 @@
 #!/usr/bin/env node
 
 /**
- * HSR Intelligence Map ingestion pipeline
+ * UrbanLens Bengaluru — data ingestion pipeline
  *
- * Sources are fetched here—not in the browser—then clipped to the OSM HSR
- * locality polygon and normalized into one runtime artifact.
+ * Fetches OSM boundary, buildings, roads, water, POIs, BBMP drain/flood KML,
+ * and Copernicus DEM for a given locality; clips everything to the locality
+ * polygon; derives 100 m grid cells with static scores; writes one bootstrap
+ * JSON per locality.
+ *
+ * Usage:
+ *   node scripts/ingest-data.mjs                    # defaults to HSR Layout
+ *   node scripts/ingest-data.mjs --locality hsr
+ *   node scripts/ingest-data.mjs --locality koramangala
+ *   node scripts/ingest-data.mjs --locality whitefield
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point } from "@turf/helpers";
+import {
+  classifyOsmTags,
+  deriveLivability,
+  emptyCategories,
+  greenLinesFromFeatures,
+  staticOverall,
+} from "./lib/livability.mjs";
+
+// ── Locality registry (mirrors src/lib/constants.ts) ─────────────────────────
+const LOCALITY_REGISTRY = {
+  hsr:          { id: "hsr",          displayName: "HSR Layout",    osmRelationId: 17168010 },
+  koramangala:  { id: "koramangala",  displayName: "Koramangala",   osmRelationId: 19884595 },
+  indiranagar:  { id: "indiranagar",  displayName: "Indiranagar",   osmRelationId: 19883335 },
+  whitefield:   { id: "whitefield",   displayName: "Whitefield",    osmRelationId: 19883364 },
+  jpnagar:      { id: "jpnagar",      displayName: "JP Nagar",      osmRelationId: 17205864 },
+  marathahalli: { id: "marathahalli", displayName: "Marathahalli",  osmRelationId: 19884550 },
+  bellandur:    { id: "bellandur",    displayName: "Bellandur",     osmRelationId: 19884585 },
+  hebbal:       { id: "hebbal",       displayName: "Hebbal",        osmRelationId: 19883365 },
+};
+
+// ── Parse CLI arguments ───────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const localityArgIdx = args.indexOf("--locality");
+const localityArgId = localityArgIdx !== -1 ? args[localityArgIdx + 1] : "hsr";
+const LOCALITY = LOCALITY_REGISTRY[localityArgId];
+if (!LOCALITY) {
+  console.error(`Unknown locality "${localityArgId}". Valid options: ${Object.keys(LOCALITY_REGISTRY).join(", ")}`);
+  process.exit(1);
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE = path.join(ROOT, "scripts", "cache");
-const OUTPUT = path.join(ROOT, "public", "data", "hsr-bootstrap.json");
+const OUTPUT = path.join(ROOT, "public", "data", `${LOCALITY.id}-bootstrap.json`);
 const GRID_SIZE_METERS = Number(process.env.GRID_SIZE_METERS || 100);
-const BOUNDARY_RELATION_ID = 17168010;
-const USER_AGENT = "HSR-Intelligence-Map/0.1 (open geodata ingestion; local development)";
+const BOUNDARY_RELATION_ID = LOCALITY.osmRelationId;
+const USER_AGENT = "UrbanLens-Bengaluru/1.0 (open geodata ingestion; local development)";
 const EARTH_RADIUS = 6_378_137;
 const OSM_API = `https://api.openstreetmap.org/api/0.6/relation/${BOUNDARY_RELATION_ID}/full.json`;
 const OVERPASS_ENDPOINTS = [
@@ -165,7 +202,7 @@ function ringArea(ring) {
 
 function boundaryFromOsm(raw) {
   const relation = raw.elements.find((item) => item.type === "relation" && item.id === BOUNDARY_RELATION_ID);
-  if (!relation) throw new Error("HSR boundary relation missing from OSM response.");
+  if (!relation) throw new Error(`Boundary relation ${BOUNDARY_RELATION_ID} (${LOCALITY.displayName}) missing from OSM response.`);
   const nodes = new Map(
     raw.elements.filter((item) => item.type === "node").map((item) => [item.id, [item.lon, item.lat]]),
   );
@@ -174,7 +211,7 @@ function boundaryFromOsm(raw) {
     .filter((member) => member.type === "way" && member.role !== "inner")
     .map((member) => (ways.get(member.ref)?.nodes || []).map((nodeId) => nodes.get(nodeId)).filter(Boolean));
   const rings = stitchRings(lines);
-  if (!rings.length) throw new Error("Could not assemble HSR boundary rings.");
+  if (!rings.length) throw new Error(`Could not assemble boundary rings for ${LOCALITY.displayName}.`);
   return {
     type: "Feature",
     properties: {
@@ -373,6 +410,36 @@ function normalizeOsm(buildingRaw, contextRaw, boundary) {
   return { buildings, roads, water, green, pois };
 }
 
+function rawElementCenter(element) {
+  if (element.type === "node" && Number.isFinite(element.lon) && Number.isFinite(element.lat)) {
+    return [element.lon, element.lat];
+  }
+  if (element.center && Number.isFinite(element.center.lon)) {
+    return [element.center.lon, element.center.lat];
+  }
+  if (Array.isArray(element.geometry) && element.geometry.length) {
+    const sum = element.geometry.reduce((acc, g) => [acc[0] + g.lon, acc[1] + g.lat], [0, 0]);
+    return [sum[0] / element.geometry.length, sum[1] / element.geometry.length];
+  }
+  return null;
+}
+
+function livabilityCategories(elements, boundary) {
+  const categories = emptyCategories();
+  const seen = new Set();
+  for (const element of elements) {
+    const key = `${element.type}/${element.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const category = classifyOsmTags(element.tags);
+    if (!category) continue;
+    const center = rawElementCenter(element);
+    if (!center || !booleanPointInPolygon(point(center), boundary)) continue;
+    categories[category].push(center);
+  }
+  return categories;
+}
+
 function extractTag(block, tag) {
   const match = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return match?.[1]?.replace(/<!\\[CDATA\\[|\\]\\]>/g, "").replace(/<[^>]+>/g, "").trim() || undefined;
@@ -504,11 +571,9 @@ function noiseScore(features) {
   return Number(clamp(9.2 - roadExposure - activityExposure).toFixed(1));
 }
 
-function connectivityScore(features) {
-  const roadSignal = clamp(features.roadLengthMeters / 75, 0, 5.5);
-  const amenitySignal = clamp(features.amenityCount * 0.35 + features.busStopCount * 0.6, 0, 4.5);
-  return Number(clamp(roadSignal + amenitySignal).toFixed(1));
-}
+// Road-length connectivity kept for reference but no longer scored.
+// The walkability-based score is computed by deriveLivability() after
+// all livability features are available, and stored in staticScores.connectivity.
 
 function baselineFloodScore(distanceToFloodPoint, distanceToDrain, distanceToLake) {
   const parts = [];
@@ -544,8 +609,8 @@ function elevationAdjustedFloodScore(features) {
 }
 
 async function fetchElevations(cells) {
-  const cachePath = path.join(CACHE, `openmeteo-elevation-${GRID_SIZE_METERS}m.json`);
-  const partialPath = path.join(CACHE, `openmeteo-elevation-${GRID_SIZE_METERS}m.partial.json`);
+  const cachePath = path.join(CACHE, `openmeteo-elevation-${LOCALITY.id}-${GRID_SIZE_METERS}m.json`);
+  const partialPath = path.join(CACHE, `openmeteo-elevation-${LOCALITY.id}-${GRID_SIZE_METERS}m.partial.json`);
   let elevations;
   try {
     elevations = JSON.parse(await fs.readFile(cachePath, "utf8"));
@@ -621,16 +686,7 @@ async function fetchElevations(cells) {
       maxDelta !== null ? Number((Math.atan(maxDelta / GRID_SIZE_METERS) * 180 / Math.PI).toFixed(1)) : null;
     cell.properties.staticScores.floodBaseline = elevationAdjustedFloodScore(cell.properties.staticFeatures);
 
-    const scores = [
-      { score: cell.properties.staticScores.floodBaseline, weight: 0.55 },
-      { score: cell.properties.staticScores.drainProximity, weight: 0.15 },
-      { score: cell.properties.staticScores.estimatedNoise, weight: 0.15 },
-      { score: cell.properties.staticScores.connectivity, weight: 0.15 },
-    ].filter((item) => item.score !== null);
-    const totalWeight = scores.reduce((sum, item) => sum + item.weight, 0);
-    const overall = totalWeight
-      ? Number((scores.reduce((sum, item) => sum + item.score * item.weight, 0) / totalWeight).toFixed(1))
-      : null;
+    const overall = staticOverall(cell.properties.staticScores);
     cell.properties.overallStatic = overall;
     cell.properties.heatScoreOverall = overall;
     cell.properties.heatScoreFlood = cell.properties.staticScores.floodBaseline;
@@ -691,7 +747,7 @@ function generateGrid(boundary, layers) {
       const cellMaxY = cellMinY + GRID_SIZE_METERS;
       const center = mercatorToLonLat([(cellMinX + cellMaxX) / 2, (cellMinY + cellMaxY) / 2]);
       if (!booleanPointInPolygon(point(center), boundary)) continue;
-      const id = `hsr-grid-${String(row).padStart(2, "0")}-${String(column).padStart(2, "0")}`;
+      const id = `${LOCALITY.id}-grid-${String(row).padStart(2, "0")}-${String(column).padStart(2, "0")}`;
       const ring = [
         mercatorToLonLat([cellMinX, cellMinY]),
         mercatorToLonLat([cellMaxX, cellMinY]),
@@ -734,22 +790,22 @@ function generateGrid(boundary, layers) {
         constructionCount,
         buildingCount,
       };
+      // deriveLivability now computes walkability-based connectivity using
+      // destination diversity. amenityCount is passed for the bonus term.
+      const livability = deriveLivability(center, layers.categories, layers.greenLines, amenityCount);
+      Object.assign(staticFeatures, livability.features);
+
       const staticScores = {
+        // drainProximity and estimatedNoise are stored for reference and flood
+        // model inputs. They are NOT in DEFAULT_WEIGHTS and not scored.
         drainProximity: drainScore(distanceToDrainMeters),
         estimatedNoise: noiseScore(staticFeatures),
-        connectivity: connectivityScore(staticFeatures),
         floodBaseline: baselineFloodScore(distanceToFloodPointMeters, distanceToDrainMeters, distanceToLakeMeters),
+        // livability.scores includes connectivity (walkability), education,
+        // healthcare, transit, dailyNeeds, greenSpace.
+        ...livability.scores,
       };
-      const staticAvailable = [
-        { score: staticScores.floodBaseline, weight: 0.55 },
-        { score: staticScores.drainProximity, weight: 0.15 },
-        { score: staticScores.estimatedNoise, weight: 0.15 },
-        { score: staticScores.connectivity, weight: 0.15 },
-      ].filter((item) => item.score !== null);
-      const staticWeight = staticAvailable.reduce((sum, item) => sum + item.weight, 0);
-      const overallStatic = staticWeight
-        ? Number((staticAvailable.reduce((sum, item) => sum + item.score * item.weight, 0) / staticWeight).toFixed(1))
-        : null;
+      const overallStatic = staticOverall(staticScores);
 
       cells.push({
         type: "Feature",
@@ -765,9 +821,12 @@ function generateGrid(boundary, layers) {
           overallStatic,
           heatScoreOverall: overallStatic,
           heatScoreFlood: staticScores.floodBaseline,
-          heatScoreDrain: staticScores.drainProximity,
-          heatScoreNoise: staticScores.estimatedNoise,
           heatScoreConnectivity: staticScores.connectivity,
+          heatScoreEducation: staticScores.education,
+          heatScoreHealthcare: staticScores.healthcare,
+          heatScoreTransit: staticScores.transit,
+          heatScoreDailyNeeds: staticScores.dailyNeeds,
+          heatScoreGreenSpace: staticScores.greenSpace,
         },
         geometry: { type: "Polygon", coordinates: [ring] },
       });
@@ -798,7 +857,7 @@ function buildSearchIndex(layers) {
   return [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-console.log("HSR Intelligence Map data ingestion");
+console.log(`UrbanLens Bengaluru — data ingestion: ${LOCALITY.displayName} (relation ${BOUNDARY_RELATION_ID})`);
 console.log(`grid   ${GRID_SIZE_METERS} m × ${GRID_SIZE_METERS} m`);
 
 const boundaryRaw = await cacheFetch(`osm-relation-${BOUNDARY_RELATION_ID}.json`, OSM_API);
@@ -825,8 +884,8 @@ const contextQuery = `[out:json][timeout:180];(
 );out tags center geom;`;
 
 const [buildingRaw, contextRaw] = await Promise.all([
-  fetchOverpass(buildingsQuery, "osm-hsr-buildings.json"),
-  fetchOverpass(contextQuery, "osm-hsr-context.json"),
+  fetchOverpass(buildingsQuery, `osm-${LOCALITY.id}-buildings.json`),
+  fetchOverpass(contextQuery, `osm-${LOCALITY.id}-context.json`),
 ]);
 const osm = normalizeOsm(buildingRaw, contextRaw, boundary);
 
@@ -853,10 +912,14 @@ const drains = [...importedDrains, ...osmDrains];
 const floodPoints = floodSources.flatMap((source) => source.points).filter((feature) =>
   booleanPointInPolygon(feature, boundary));
 
+const categories = livabilityCategories([...buildingRaw.elements, ...contextRaw.elements], boundary);
+const greenLines = greenLinesFromFeatures(osm.green);
 const layers = {
   ...osm,
   drains,
   floodPoints,
+  categories,
+  greenLines,
 };
 const grid = generateGrid(boundary, layers);
 await fetchElevations(grid);
@@ -866,6 +929,7 @@ const bootstrap = {
   meta: {
     generatedAt: new Date().toISOString(),
     gridSizeMeters: GRID_SIZE_METERS,
+    localityId: LOCALITY.id,
     boundarySource: boundary.properties.source,
     boundaryRelationId: BOUNDARY_RELATION_ID,
     osmAttribution: "© OpenStreetMap contributors, ODbL",
@@ -879,6 +943,12 @@ const bootstrap = {
       pois: osm.pois.length,
       gridCells: grid.length,
       searchItems: searchIndex.length,
+      educationPoints: categories.education.length,
+      healthcarePoints: categories.healthcare.length,
+      transitPoints: categories.transit.length,
+      metroStations: categories.metro.length,
+      dailyNeedsPoints: categories.dailyNeeds.length,
+      policePoints: categories.police.length,
     },
   },
   boundary,
@@ -897,3 +967,4 @@ await fs.writeFile(OUTPUT, `${JSON.stringify(bootstrap)}\n`);
 const sizeMb = Buffer.byteLength(JSON.stringify(bootstrap)) / 1024 / 1024;
 console.log(`write  ${path.relative(ROOT, OUTPUT)} (${sizeMb.toFixed(2)} MB)`);
 console.log("counts", bootstrap.meta.counts);
+console.log(`done   ${LOCALITY.displayName} ingestion complete`);

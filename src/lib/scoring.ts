@@ -10,6 +10,10 @@ export type ScoreResult = {
   coverage: number;
 };
 
+// Score returned when a metric has no evidence. Pulling uncertain ratings toward
+// this value prevents low-confidence metrics from distorting the overall result.
+const NEUTRAL_SCORE = 5.0;
+
 const clamp = (value: number, min = 0, max = 10) => Math.min(max, Math.max(min, value));
 
 export function riskFromScore(score: number | null, confidence = 1): RiskLevel {
@@ -49,20 +53,29 @@ export function calculateOverallScore(
   const totalConfiguredWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
   const coverage = totalAvailableWeight / totalConfiguredWeight;
 
-  const weightedScore = entries.reduce(
-    (sum, item) => sum + (item.metric.ratingOutOf10 ?? 0) * (item.weight / totalAvailableWeight),
+  // Confidence-adjusted rating: pull each metric toward NEUTRAL_SCORE proportional
+  // to its uncertainty. A metric with confidence 0.30 and rating 7.0 contributes
+  // (7.0 × 0.30 + 5.0 × 0.70) = 5.6, not 7.0. This prevents low-confidence
+  // proxies from dominating the composite score.
+  const confidenceAdjustedEntries = entries.map((item) => ({
+    ...item,
+    adjustedRating:
+      (item.metric.ratingOutOf10 ?? 0) * item.metric.confidence +
+      NEUTRAL_SCORE * (1 - item.metric.confidence),
+  }));
+
+  const weightedScore = confidenceAdjustedEntries.reduce(
+    (sum, item) => sum + item.adjustedRating * (item.weight / totalAvailableWeight),
     0,
   );
   const weightedConfidence = entries.reduce(
     (sum, item) => sum + item.metric.confidence * (item.weight / totalAvailableWeight),
     0,
   );
-  const weakestSourceGuard = 0.88 + Math.min(...entries.map((item) => item.metric.confidence)) * 0.12;
-  const confidence = clamp(weightedConfidence * (0.65 + coverage * 0.35), 0, 1);
 
-  // Uncertainty is disclosed in confidence, while the visible score receives only a
-  // modest evidence-quality adjustment so one weak input cannot dominate the result.
-  const score = clamp(weightedScore * (0.94 + confidence * 0.06) * weakestSourceGuard);
+  // Coverage penalty: fewer available metrics → lower confidence in the composite.
+  const confidence = clamp(weightedConfidence * (0.65 + coverage * 0.35), 0, 1);
+  const score = clamp(weightedScore);
 
   return {
     score: Number(score.toFixed(1)),

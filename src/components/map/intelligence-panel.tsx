@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  AlertTriangle,
   Antenna,
   Building,
   ChevronDown,
@@ -9,32 +10,142 @@ import {
   Construction,
   Droplets,
   ExternalLink,
+  GraduationCap,
   Gauge,
+  Heart,
   Info,
+  Leaf,
   MapPin,
   Network,
   Route,
+  Shield,
   ShieldCheck,
+  ShoppingBag,
+  Siren,
+  Train,
   Volume2,
   Waves,
   X,
+  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { DEFAULT_WEIGHTS } from "@/lib/constants";
+import { scoreToColor } from "@/lib/color";
 import { useMapStore } from "@/lib/store";
-import type { AnalysisCell, CellMetric, MetricEvidence } from "@/lib/types";
+import type { AnalysisCell, CellMetric, MetricCategory, MetricEvidence } from "@/lib/types";
 
+// ── Icon map ──────────────────────────────────────────────────────────────────
 const metricIcons: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   airQuality: Activity,
   floodSusceptibility: Waves,
   drainProximity: Droplets,
+  roadProximity: Volume2,
   rainfall: CloudRain,
-  estimatedNoise: Volume2,
   connectivity: Route,
   networkQuality: Antenna,
   constructionProximity: Construction,
   nearbyAmenities: Building,
+  policeProximity: Siren,
+  electricityContext: Zap,
+  waterSupplyContext: Droplets,
+  transitFrequency: Train,
+  commuteContext: Route,
+  heatIslandContext: Activity,
+  ndviGreenCover: Leaf,
+  civicComplaints: Shield,
+  crimeContext: Shield,
+  education: GraduationCap,
+  healthcare: Heart,
+  transit: Train,
+  dailyNeeds: ShoppingBag,
+  greenSpace: Leaf,
 };
 
+const categoryIcons: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  environment: Leaf,
+  connectivity: Train,
+  education: GraduationCap,
+  healthcare: Heart,
+  dailyLife: ShoppingBag,
+  utilities: Zap,
+  civic: Shield,
+};
+
+// ── Score breakdown ───────────────────────────────────────────────────────────
+type BreakdownRow = {
+  key: string;
+  label: string;
+  rating: number;
+  weightPct: number;
+  contribution: number;
+  confidence: number;
+  color: string;
+};
+
+function computeBreakdown(metrics: CellMetric[]): BreakdownRow[] {
+  const weights = DEFAULT_WEIGHTS as Record<string, number>;
+  const scored = metrics.filter(
+    (metric) => metric.ratingOutOf10 !== null && weights[metric.key] !== undefined,
+  );
+  const availableWeight = scored.reduce((sum, metric) => sum + weights[metric.key], 0) || 1;
+  return scored
+    .map((metric) => {
+      const rating = metric.ratingOutOf10 as number;
+      const normalised = weights[metric.key] / availableWeight;
+      return {
+        key: metric.key,
+        label: metric.label,
+        rating,
+        weightPct: Math.round(weights[metric.key] * 100),
+        contribution: Number((rating * normalised).toFixed(2)),
+        confidence: metric.confidence,
+        color: scoreToColor(rating),
+      };
+    })
+    .sort((a, b) => b.contribution - a.contribution);
+}
+
+function ScoreBreakdown({ rows }: { rows: BreakdownRow[] }) {
+  if (!rows.length) return null;
+  const maxContribution = Math.max(...rows.map((row) => row.contribution)) || 1;
+  return (
+    <section className="score-breakdown" aria-label="Score breakdown by feature">
+      <div className="breakdown-head">
+        <span>Why this score</span>
+        <em>sub-score × weight = contribution</em>
+      </div>
+      <ul>
+        {rows.map((row, index) => (
+          <motion.li
+            key={row.key}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.04 * index, duration: 0.28 }}
+          >
+            <div className="breakdown-label">
+              <span>{row.label}</span>
+              <span className="breakdown-weight">{row.weightPct}% wt</span>
+            </div>
+            <div className="breakdown-track">
+              <motion.i
+                style={{ background: row.color }}
+                initial={{ width: 0 }}
+                animate={{ width: `${(row.contribution / maxContribution) * 100}%` }}
+                transition={{ delay: 0.04 * index, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </div>
+            <div className="breakdown-value">
+              <strong>{row.rating.toFixed(1)}</strong>
+              <span className="contribution-value">+{row.contribution.toFixed(2)}</span>
+            </div>
+          </motion.li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(value?: string) {
   if (!value) return "Not provided";
   const date = new Date(value);
@@ -55,6 +166,7 @@ function riskCopy(cell: AnalysisCell) {
   return "Insufficient evidence";
 }
 
+// ── Evidence row ──────────────────────────────────────────────────────────────
 function EvidenceRow({ evidence }: { evidence: MetricEvidence }) {
   return (
     <div className="evidence-row">
@@ -75,30 +187,64 @@ function EvidenceRow({ evidence }: { evidence: MetricEvidence }) {
   );
 }
 
-function MetricCard({ metric, open = false }: { metric: CellMetric; open?: boolean }) {
+// ── Individual metric card ────────────────────────────────────────────────────
+function MetricCard({
+  metric,
+  open = false,
+  weightPct,
+  contribution,
+}: {
+  metric: CellMetric;
+  open?: boolean;
+  weightPct?: number;
+  contribution?: number;
+}) {
   const Icon = metricIcons[metric.key] || Gauge;
   const score = metric.ratingOutOf10;
+  const isContextOnly = score === null && metric.value !== null && metric.value !== undefined;
+
   return (
     <details className={`metric-card ${metric.status}`} open={open}>
       <summary>
         <span className="metric-icon"><Icon aria-hidden="true" /></span>
         <div className="metric-title">
           <strong>{metric.label}</strong>
-          <span>{metric.value === null || metric.value === undefined ? "Data unavailable" : `${metric.value}${metric.unit ? ` ${metric.unit}` : ""}`}</span>
+          <span>
+            {metric.value === null || metric.value === undefined
+              ? "Data unavailable"
+              : `${metric.value}${metric.unit ? ` ${metric.unit}` : ""}`}
+          </span>
         </div>
         <div className="metric-score">
-          {score === null ? <strong>—</strong> : <strong>{score.toFixed(1)}</strong>}
-          <small>{score === null ? "unscored" : "/ 10"}</small>
+          {score === null
+            ? <strong className={isContextOnly ? "context-label" : ""}>—</strong>
+            : <strong>{score.toFixed(1)}</strong>}
+          <small>{score === null ? (isContextOnly ? "context" : "unavailable") : "/ 10"}</small>
         </div>
         <ChevronDown className="metric-chevron" aria-hidden="true" />
       </summary>
       <div className="metric-detail">
         <p>{metric.explanation}</p>
-        <div className="confidence-row">
-          <span>Evidence confidence</span>
-          <div><i style={{ width: `${Math.round(metric.confidence * 100)}%` }} /></div>
-          <strong>{Math.round(metric.confidence * 100)}%</strong>
-        </div>
+        {weightPct !== undefined && score !== null && (
+          <div className="metric-contribution">
+            <div><span>Weight</span><strong>{weightPct}%</strong></div>
+            <div><span>Sub-score</span><strong>{score.toFixed(1)} / 10</strong></div>
+            <div><span>Contribution</span><strong>+{(contribution ?? 0).toFixed(2)}</strong></div>
+          </div>
+        )}
+        {score === null && isContextOnly && (
+          <div className="context-note">
+            <Info aria-hidden="true" />
+            <span>Shown as factual context only. Not included in the composite score.</span>
+          </div>
+        )}
+        {metric.confidence > 0 && (
+          <div className="confidence-row">
+            <span>Evidence confidence</span>
+            <div><i style={{ width: `${Math.round(metric.confidence * 100)}%` }} /></div>
+            <strong>{Math.round(metric.confidence * 100)}%</strong>
+          </div>
+        )}
         {metric.evidence.length ? (
           <div className="evidence-list">
             {metric.evidence.map((evidence, index) => (
@@ -116,6 +262,92 @@ function MetricCard({ metric, open = false }: { metric: CellMetric; open?: boole
   );
 }
 
+// ── Category card ─────────────────────────────────────────────────────────────
+function CategoryCard({
+  category,
+  breakdownByKey,
+  defaultOpen,
+}: {
+  category: MetricCategory;
+  breakdownByKey: Map<string, BreakdownRow>;
+  defaultOpen?: boolean;
+}) {
+  const Icon = categoryIcons[category.key] || Gauge;
+  const score = category.score;
+  const scoredCount = category.metrics.filter((m) => m.ratingOutOf10 !== null).length;
+  const contextCount = category.metrics.filter(
+    (m) => m.ratingOutOf10 === null && m.value !== null && m.value !== undefined,
+  ).length;
+
+  const riskClass =
+    score === null ? "unknown" :
+    score >= 7.5 ? "low" :
+    score >= 5 ? "moderate" : "high";
+
+  return (
+    <details className={`category-card ${riskClass}`} open={defaultOpen}>
+      <summary>
+        <span className="category-icon"><Icon aria-hidden="true" /></span>
+        <div className="category-title">
+          <strong>{category.label}</strong>
+          <span>
+            {scoredCount > 0 ? `${scoredCount} scored` : ""}
+            {scoredCount > 0 && contextCount > 0 ? " · " : ""}
+            {contextCount > 0 ? `${contextCount} context` : ""}
+          </span>
+        </div>
+        <div className="category-score">
+          {score === null
+            ? <strong>—</strong>
+            : <strong style={{ color: scoreToColor(score) }}>{score.toFixed(1)}</strong>}
+          <small>{score === null ? "context" : "/ 10"}</small>
+        </div>
+        <ChevronDown className="category-chevron" aria-hidden="true" />
+      </summary>
+      <div className="category-metrics">
+        <p className="category-desc">{category.description}</p>
+        {category.metrics.map((metric, index) => {
+          const row = breakdownByKey.get(metric.key);
+          return (
+            <MetricCard
+              key={metric.key}
+              metric={metric}
+              open={index === 0 && scoredCount > 0}
+              weightPct={row?.weightPct}
+              contribution={row?.contribution}
+            />
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+// ── Flood alert ───────────────────────────────────────────────────────────────
+function FloodAlert({ score }: { score: number }) {
+  return (
+    <motion.div
+      className="flood-alert"
+      role="alert"
+      aria-live="polite"
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <AlertTriangle aria-hidden="true" />
+      <div>
+        <strong>High flood susceptibility</strong>
+        <p>
+          This cell scored {score.toFixed(1)}/10 on flood susceptibility. The composite score may
+          not reflect this risk adequately — evaluate the flood layer and drainage evidence before
+          making any housing decision in this area.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Panel skeleton ─────────────────────────────────────────────────────────────
 function PanelSkeleton() {
   return (
     <div className="panel-skeleton" aria-label="Loading cell evidence">
@@ -125,6 +357,27 @@ function PanelSkeleton() {
   );
 }
 
+// ── Category summary row (above category cards, shows quick stats) ─────────────
+function CategorySummaryRow({ categories }: { categories: MetricCategory[] }) {
+  const scored = categories.filter((c) => c.score !== null);
+  if (!scored.length) return null;
+  return (
+    <div className="category-summary-row" aria-label="Category scores overview">
+      {scored.map((cat) => {
+        const Icon = categoryIcons[cat.key] || Gauge;
+        return (
+          <div key={cat.key} className="category-summary-chip">
+            <Icon aria-hidden="true" />
+            <span>{cat.label.split(" ")[0]}</span>
+            <strong style={{ color: scoreToColor(cat.score!) }}>{cat.score!.toFixed(1)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
 export function IntelligencePanel({
   cell,
   loading,
@@ -138,19 +391,21 @@ export function IntelligencePanel({
   const close = useMapStore((state) => state.setPanelOpen);
   const context = useMapStore((state) => state.selectedContext);
   const selectedCellId = useMapStore((state) => state.selectedCellId);
-  const metrics = cell
-    ? [
-      cell.metrics.airQuality,
-      cell.metrics.floodSusceptibility,
-      cell.metrics.drainProximity,
-      cell.metrics.rainfall,
-      cell.metrics.estimatedNoise,
-      cell.metrics.connectivity,
-      cell.metrics.nearbyAmenities,
-      cell.metrics.constructionProximity,
-      cell.metrics.networkQuality,
-    ].filter((metric): metric is CellMetric => Boolean(metric))
+
+  // Flatten all metrics for breakdown computation
+  const allMetrics = cell
+    ? Object.values(cell.metrics).filter((m): m is CellMetric => Boolean(m))
     : [];
+
+  const breakdown = computeBreakdown(allMetrics);
+  const breakdownByKey = new Map(breakdown.map((row) => [row.key, row]));
+
+  const floodScore = cell?.metrics.floodSusceptibility.ratingOutOf10 ?? null;
+  const showFloodAlert = cell?.floodAlert === true;
+
+  // Determine which category to open by default (worst scored or environment)
+  const categories = cell?.categories ?? [];
+  const defaultOpenKey = categories.find((c) => c.score !== null && c.score < 5)?.key ?? "environment";
 
   return (
     <AnimatePresence>
@@ -166,7 +421,7 @@ export function IntelligencePanel({
           <div className="sheet-handle" aria-hidden="true" />
           <header className="panel-topbar">
             <div>
-              <span>GEOGRAPHIC CELL</span>
+              <span>NEIGHBORHOOD INTELLIGENCE</span>
               <strong>{selectedCellId}</strong>
             </div>
             <button type="button" onClick={() => close(false)} aria-label="Close cell intelligence">
@@ -184,6 +439,11 @@ export function IntelligencePanel({
           )}
           {cell && !loading && (
             <div className="panel-scroll">
+              {showFloodAlert && floodScore !== null && (
+                <FloodAlert score={floodScore} />
+              )}
+
+              {/* Overall score hero */}
               <section className={`score-hero ${cell.riskLevel}`}>
                 <div className="score-ring">
                   <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -197,14 +457,21 @@ export function IntelligencePanel({
                     />
                   </svg>
                   <div>
-                    <strong>{cell.overallScore?.toFixed(1) ?? "—"}</strong>
+                    <motion.strong
+                      key={cell.overallScore ?? "na"}
+                      initial={{ opacity: 0, scale: 0.7 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                    >
+                      {cell.overallScore?.toFixed(1) ?? "—"}
+                    </motion.strong>
                     <span>/ 10</span>
                   </div>
                 </div>
                 <div className="score-copy">
-                  <span>OVERALL CELL SIGNAL</span>
+                  <span>NEIGHBORHOOD INTELLIGENCE SCORE</span>
                   <h2>{riskCopy(cell)}</h2>
-                  <p>{Math.round(cell.confidence * 100)}% evidence confidence · {cell.sizeMeters} m × {cell.sizeMeters} m</p>
+                  <p>{Math.round(cell.confidence * 100)}% evidence confidence · {cell.sizeMeters} m × {cell.sizeMeters} m cell</p>
                 </div>
               </section>
 
@@ -215,22 +482,54 @@ export function IntelligencePanel({
                 </div>
               )}
 
-              <div className="panel-section-title">
-                <span>Evidence signals</span>
-                <em>{metrics.filter((metric) => metric.ratingOutOf10 !== null).length} scored</em>
-              </div>
-              <div className="metric-list">
-                {metrics.map((metric, index) => <MetricCard key={metric.key} metric={metric} open={index < 2} />)}
-              </div>
+              {/* Category quick-score row */}
+              {categories.length > 0 && (
+                <CategorySummaryRow categories={categories} />
+              )}
 
+              {/* Score breakdown (why this score) */}
+              <ScoreBreakdown rows={breakdown} />
+
+              {/* Category cards hierarchy */}
+              {categories.length > 0 && (
+                <>
+                  <div className="panel-section-title">
+                    <span>Neighborhood Intelligence</span>
+                    <em>{categories.filter((c) => c.score !== null).length} scored categories · {breakdown.length} metrics</em>
+                  </div>
+                  <div className="category-list">
+                    {categories.map((category, index) => (
+                      <motion.div
+                        key={category.key}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: Math.min(0.04 * index, 0.25), duration: 0.26 }}
+                      >
+                        <CategoryCard
+                          category={category}
+                          breakdownByKey={breakdownByKey}
+                          defaultOpen={category.key === defaultOpenKey}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Transparent scoring note */}
               <section className="score-method">
                 <ShieldCheck aria-hidden="true" />
-                <div><strong>Transparent scoring</strong><p>Missing metrics are ignored and weights are re-normalised. Confidence falls when important evidence is unavailable.</p></div>
+                <div>
+                  <strong>Transparent evidence-backed scoring</strong>
+                  <p>
+                    Every metric shown is backed by a named, verifiable source. Low-confidence metrics are pulled toward neutral (5.0) before weighting. Context-only metrics are shown for awareness but never affect the score. Limitations are explicit at every level.
+                  </p>
+                </div>
                 <a href="/methodology">Methodology</a>
               </section>
 
               <footer className="panel-disclaimer">
-                <p>Metrics describe the selected geographic cell and are based on public, modelled, or derived data. They do not certify the safety, quality, or condition of any individual property.</p>
+                <p>Metrics describe the selected geographic cell and are based on public, modelled, or derived data. They do not certify the safety, quality, or condition of any individual property, building, or resident.</p>
                 <span>Updated {formatDate(cell.updatedAt)}</span>
               </footer>
             </div>

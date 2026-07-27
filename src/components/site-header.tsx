@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { ArrowLeft, Box } from "lucide-react";
+import { ArrowLeft, LayoutGrid } from "lucide-react";
 
 export function SiteHeader({ back = false }: { back?: boolean }) {
   return (
     <header className="site-header">
-      <Link className="brand" href="/" aria-label="HSR Intelligence Map home">
-        {back ? <ArrowLeft aria-hidden="true" /> : <span className="brand-mark"><Box aria-hidden="true" /></span>}
+      <Link className="brand" href="/" aria-label="UrbanLens Bengaluru home">
+        {back ? <ArrowLeft aria-hidden="true" /> : <span className="brand-mark"><LayoutGrid aria-hidden="true" /></span>}
         <span>
-          <strong>HSR</strong>
-          <em>INTELLIGENCE MAP</em>
+          <strong>URBAN</strong>
+          <em>LENS</em>
         </span>
       </Link>
       <nav aria-label="Primary navigation">

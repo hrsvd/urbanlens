@@ -4,14 +4,14 @@ import { InfoPage } from "@/components/info-page";
 export const metadata: Metadata = { title: "API reference" };
 
 const endpoints = [
-  ["GET", "/api/map/bootstrap", "Complete local map payload and grid metadata"],
+  ["GET", "/api/map/bootstrap?locality=", "Complete map payload and grid metadata for the specified locality"],
   ["GET", "/api/map/buildings", "Clipped building footprints"],
   ["GET", "/api/map/roads", "Clipped road centre-lines"],
-  ["GET", "/api/map/landmarks", "Named HSR points of interest"],
+  ["GET", "/api/map/landmarks", "Named points of interest for the active locality"],
   ["GET", "/api/map/grid", "100 m analysis cells and static features"],
   ["GET", "/api/cells/:cellId", "Cell geometry and static evidence"],
   ["GET", "/api/cells/:cellId/metrics", "Scored evidence with dynamic model context"],
-  ["GET", "/api/search?q=", "Local, cached HSR place index"],
+  ["GET", "/api/search?q=", "Cross-locality cached place index"],
   ["GET", "/api/data-sources", "Machine-readable source ledger"],
   ["GET", "/api/health", "Service health"],
 ];

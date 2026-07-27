@@ -1,9 +1,9 @@
 # Data verification
 
 Tested: **25 July 2026**  
-Test coordinate: HSR Layout centre, `12.9116, 77.6389`
+Test coordinate: HSR Layout centre, `12.9116, 77.6389` (reference locality for initial verification)
 
-Every used source below was called from the development environment and its returned fields were inspected. Static source responses are cached only for ingestion; runtime adapters add timeouts, validation, caching, retry, and graceful partial failure.
+Every used source below was called from the development environment and its returned fields were inspected. These verifications apply to all supported localities unless noted; locality-specific coverage figures are for HSR Layout. Static source responses are cached only for ingestion; runtime adapters add timeouts, validation, caching, retry, and graceful partial failure.
 
 ## OpenStreetMap boundary API
 
@@ -114,17 +114,57 @@ Result: **accepted with rate-limited, resumable ingestion**.
 **HSR coverage:** Not relied upon  
 **Used in scoring:** No
 
-Result: **rejected for runtime search**. The application searches its locally ingested HSR OSM index, with 280 ms debounce and stale-request abort. The environment variable is retained for a future compliant proxy/provider adapter.
+Result: **rejected for runtime search**. The application searches its locally ingested cross-locality OSM index, with 280 ms debounce and stale-request abort. The environment variable is retained for a future compliant proxy/provider adapter.
+
+## OpenStreetMap amenity points — livability access
+
+**Source:** OpenStreetMap contributors via Overpass (same offline query as above)
+**Sample request:** `nwr["amenity"]`, `nwr["shop"]`, `nwr["public_transport"]`, `node["highway"="bus_stop"]`, `railway`/`station` tags inside the boundary bbox
+**Observed response fields:** `elements`, `type`, `id`, `tags` (`amenity`, `shop`, `public_transport`, `railway`, `station`), `center`, `geometry`
+**HSR coverage after clipping:** 35 education points (school/college/kindergarten), 68 healthcare (hospital/clinic/doctors/pharmacy), 83 bus/transit stops, 1 metro station, 75 daily-needs retail, 2 police stations, 70 green polygons
+**Update frequency:** Community edits; manual versioned import
+**License:** ODbL 1.0
+**Limitations:** Mapping completeness varies; a point is a location, not a quality, capacity, or opening-hours statement. Absence of a mapped feature is not proof one does not exist.
+**Used in scoring:** Yes — schools, healthcare, public-transport, daily-needs, parks/green access, and (low-confidence) police proximity, all as 100 m-cell proximity/density access proxies
+
+Result: **accepted for offline ingestion only**, derived alongside the other static features. Never called on page interaction.
+
+## UDISE+ (education statistics)
+
+**Source:** UDISE+ / Ministry of Education
+**Observed granularity:** District and block-level aggregates; not geocoded per school at street resolution
+**HSR coverage:** Not usable at 100 m cell resolution
+**Used in scoring:** No
+
+Result: **rejected as a scoring source.** OSM education points are used for street-resolution proximity instead. UDISE+ remains a candidate for district-level context only.
+
+## Karnataka crime data (SCRB / Bengaluru City Police / NCRB)
+
+**Source:** State Crime Records Bureau, Bengaluru City Police, NCRB via data.gov.in / opencity.in
+**Observed granularity:** City/district/category-level counts; not geocoded to ward or 100 m resolution
+**HSR coverage:** No hyperlocal geocoding
+**Used in scoring:** No hyperlocal crime score
+
+Result: **rejected for a hyperlocal crime score.** A city-wide number must not masquerade as a cell-level rate. Only a clearly labelled, low-confidence **police-station proximity proxy** (from OSM `amenity=police`) is shown, and it is explicitly not a crime rate.
+
+## BESCOM electricity reliability
+
+**Source:** Bangalore Electricity Supply Company (BESCOM)
+**Observed availability:** No open, reusable outage/reliability dataset at street or 100 m-cell resolution was found
+**HSR coverage:** None at this resolution
+**Used in scoring:** No
+
+Result: **disabled**. UI states electricity reliability is unavailable at this resolution rather than estimating it.
 
 ## Network quality
 
-TRAI/provider and public-catalogue candidates were considered, but no verified reusable dataset was accepted as representative at 100 m HSR cell resolution. Provider marketing coverage is not equivalent to measured performance.
+TRAI/provider and public-catalogue candidates were considered, but no verified reusable dataset was accepted as representative at 100 m cell resolution across Bengaluru localities. Provider marketing coverage is not equivalent to measured performance.
 
 Result: **disabled**. UI states “Network quality data unavailable. Community measurements planned.” It is excluded from the score.
 
 ## Property price/rent
 
-No legitimate open, reusable, adequately documented HSR dataset was accepted. Prohibited-platform scraping was not attempted.
+No legitimate open, reusable, adequately documented locality-level dataset was accepted. Prohibited-platform scraping was not attempted.
 
 Result: **disabled** and excluded.
 

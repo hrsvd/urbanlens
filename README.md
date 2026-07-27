@@ -1,55 +1,71 @@
-# HSR Intelligence Map
+# UrbanLens Bengaluru
 
-An evidence-led, interactive 3D geographic intelligence prototype for **HSR Layout, Bengaluru**.
+An evidence-led, interactive 3D geographic intelligence tool for **major Bengaluru localities**.
 
-The application renders a real, locally ingested HSR city surface—10,810 OSM building footprints, roads, parks, water, named places, BBMP/OpenCity drains and flood evidence—then divides the locality into 706 projected **100 m × 100 m** analysis cells. Selecting a cell opens environmental and infrastructure indicators with confidence, provenance, resolution, and limitations.
+UrbanLens renders real, locally ingested city surfaces — OSM building footprints, roads, parks, water, named places, BBMP/OpenCity drains and flood evidence — then divides each locality into projected **100 m × 100 m** analysis cells. Selecting a cell opens environmental and infrastructure indicators with confidence, provenance, resolution, and limitations.
 
 It never scores an individual apartment, building, street, resident, or property.
 
-![HSR Intelligence Map overview](docs/hsr-map-overview.png)
+## Localities covered
+
+| Locality | OSM Relation | Approx. size |
+|---|---|---|
+| HSR Layout | 17168010 | ~3.5 km wide |
+| Koramangala | 19884595 | — |
+| Indiranagar | 19883335 | — |
+| Whitefield | 19883364 | — |
+| JP Nagar | 17205864 | — |
+| Marathahalli | 19884550 | — |
+| Bellandur | 19884585 | — |
+| Hebbal | 19883365 | — |
 
 ## What is implemented
 
-- Local MapLibre 3D map: pan, zoom, pitch, rotate, orbit, reset, fly-to
-- OSM relation `17168010` as the HSR locality boundary
-- Real building footprints with mapped height/level data where present and disclosed category heuristics otherwise
+- Local MapLibre 3D map per locality: pan, zoom, pitch, rotate, orbit, reset, fly-to
+- Per-locality OSM boundary relation as clipping mask
+- Real building footprints with mapped height/level data
 - Roads, parks, water, drains, flood points, landmarks, POIs, and local place labels
 - Projected, configurable 100 m square grid with click-to-cell lookup
-- Translucent selection volume that preserves underlying geometry
+- In-body locality switcher — switch between localities without a page reload
+- Score-driven, semi-transparent selection overlay on a diverging red↔green scale
 - Full-grid metric surface modes and a non-binary legend
-- Locally indexed, throttled search for HSR places and roads
-- Responsive desktop intelligence panel and mobile bottom sheet
+- Full/multi-part **address-aware** cross-locality search: tokenised, specificity-ranked, with road-intersection resolution and a disambiguation list; results tagged with locality name
+- Responsive desktop intelligence panel and mobile bottom sheet with per-metric breakdown (sub-score · weight · contribution · confidence)
 - Cached Open-Meteo air-quality and weather adapters with schema validation and graceful partial failure
-- Imported BBMP/OpenCity stormwater-drain and flood-vulnerability KML
+- Imported BBMP/OpenCity stormwater-drain and flood-vulnerability KML (coverage varies by locality; gaps shown honestly)
 - Copernicus DEM GLO-90 samples for relative elevation and local-slope features
+- Livability access signals derived from OSM — schools, healthcare, public transport (incl. Namma Metro), daily-needs retail, parks/green space, and a low-confidence police-proximity proxy
 - Explainable scoring with missing-data re-normalisation
-- Explicitly unavailable network quality instead of an invented score
+- Explicitly unavailable network quality, electricity reliability, and hyperlocal crime instead of invented scores
+- Distinctive typography (Sora display, IBM Plex Sans body, IBM Plex Mono tabular readouts) and Framer Motion micro-interactions
 - `/methodology`, `/data-sources`, `/about`, and `/api-docs`
 - Unit, integration-style normalization, desktop E2E, and mobile E2E tests
 
 ## Architecture
 
 ```text
-Offline / versioned ingestion
+Offline / versioned ingestion (per locality)
 
 OSM API + Overpass        OpenCity / BBMP KML        Open-Meteo Elevation
         │                         │                           │
         └──────── download → validate → normalize ───────────┘
                                       │
-                     clip to HSR relation 17168010
+                    clip to locality OSM boundary relation
                                       │
                   derive 100 m grid + static cell features
                                       │
-                     public/data/hsr-bootstrap.json
+              public/data/{localityId}-bootstrap.json
 
 Runtime
 
-Browser ── GET /api/map/bootstrap ── local normalized artifact
+Browser ── GET /api/map/bootstrap?locality=hsr ── locality artifact
    │
+   ├── LocalitySwitcher (body) → activeLocality → new bootstrap query
    ├── MapLibre WebGL: real geometry + 3D extrusion + cell layers
-   ├── GET /api/search?q= ───────── local OSM name index
+   ├── GET /api/search?q= ───────── cross-locality OSM name index
    └── GET /api/cells/:id/metrics
                 │
+                ├── locality derived from cell ID prefix
                 ├── static drain/flood/elevation/road/amenity features
                 └── bucketed + cached Open-Meteo air/weather requests
                               │
@@ -69,7 +85,7 @@ Architectural decisions and tradeoffs are documented in [docs/architecture.md](d
 - Zod upstream-response validation
 - Vitest, Testing Library, Playwright
 
-There is no database requirement for this HSR-only MVP. Static geospatial work happens during ingestion, not on Vercel request handlers or every map click.
+Static geospatial work happens during ingestion. Vercel request handlers read pre-generated artifacts and never perform large spatial operations.
 
 ## Local setup
 
@@ -82,13 +98,16 @@ Requirements:
 ```bash
 npm install
 copy .env.example .env.local
-npm run data:ingest
+# Ingest all localities (sequential, takes a while)
+npm run data:ingest:all
+# Or ingest a single locality
+node scripts/ingest-data.mjs --locality hsr
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-The repository already contains a generated HSR artifact. Re-run ingestion when source geometry or the grid configuration changes.
+The repository already contains a generated HSR artifact. Re-run ingestion when source geometry or the grid configuration changes. New localities need a first-run ingestion before they appear.
 
 ## Environment variables
 
@@ -101,32 +120,39 @@ No secret keys are required.
 | `GRID_SIZE_METERS` | `100` | Ingestion-time square cell size |
 | `OPEN_METEO_BASE_URL` | `https://api.open-meteo.com` | Weather adapter |
 | `OPEN_METEO_AIR_QUALITY_BASE_URL` | `https://air-quality-api.open-meteo.com` | Air-quality adapter |
-| `NOMINATIM_BASE_URL` | public endpoint | Reserved adapter configuration; public endpoint is not used at runtime |
+| `NOMINATIM_BASE_URL` | public endpoint | Reserved adapter configuration |
 | `OVERPASS_BASE_URL` | official endpoint | Offline OSM ingestion |
 
 ## Data ingestion
 
 ```bash
-# Complete HSR data artifact
-npm run data:ingest
+# Ingest all localities sequentially
+npm run data:ingest:all
 
-# Aliases retained for future split pipelines
-npm run data:osm
-npm run data:environment
+# Ingest a single locality
+node scripts/ingest-data.mjs --locality hsr
+node scripts/ingest-data.mjs --locality koramangala
+node scripts/ingest-data.mjs --locality indiranagar
+# ... etc
+
+# Re-derive only the livability access features onto an existing artifact
+node scripts/augment-data.mjs --locality hsr
 ```
 
-The current ingestion script:
+The ingestion script for each locality:
 
-1. downloads and assembles the OSM HSR locality relation;
+1. downloads and assembles the OSM locality boundary relation;
 2. fetches buildings and context from Overpass with fallback/retry;
-3. clips geometry to the locality;
+3. clips geometry to the locality polygon;
 4. downloads OpenCity drain and flood KML;
 5. samples the 90 m Copernicus DEM through the Open-Meteo Elevation API with persisted, rate-limited batches;
 6. generates metre-aligned 100 m cells;
-7. derives distance, density, connectivity, noise-proxy, elevation, and baseline flood features;
-8. writes `public/data/hsr-bootstrap.json`.
+7. derives distance, density, connectivity, noise-proxy, elevation, baseline flood, and livability access features;
+8. writes `public/data/{localityId}-bootstrap.json`.
 
 Raw downloads are cached under `scripts/cache/` and intentionally ignored by Git.
+
+The data-loading strategy is documented in [docs/data-strategy.md](docs/data-strategy.md).
 
 ## Development and test commands
 
@@ -145,14 +171,14 @@ node scripts/inspect-ui.mjs  # headless runtime/console inspection
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/map/bootstrap` | Complete normalized HSR map payload |
+| `GET /api/map/bootstrap?locality=` | Complete normalized map payload for a locality |
 | `GET /api/map/buildings` | Building footprint collection |
 | `GET /api/map/roads` | Road collection |
-| `GET /api/map/landmarks` | Named POIs |
+| `GET /api/map/landmarks` | Named POIs for the active locality |
 | `GET /api/map/grid` | Analysis cells and static features |
 | `GET /api/cells/:cellId` | Cell geometry/static evidence |
 | `GET /api/cells/:cellId/metrics` | Full evidence and scored metrics |
-| `GET /api/search?q=` | Local HSR OSM index |
+| `GET /api/search?q=` | Cross-locality OSM name index |
 | `GET /api/data-sources` | Source ledger |
 | `GET /api/health` | Service health |
 
@@ -160,20 +186,26 @@ See `/api-docs` in the running application.
 
 ## Scoring summary
 
-The configurable default weights are:
+The configurable default weights (sum to 1.0) are:
 
 ```ts
 {
-  airQuality: 0.25,
-  floodSusceptibility: 0.30,
-  drainProximity: 0.15,
-  rainfall: 0.10,
-  estimatedNoise: 0.10,
-  connectivity: 0.10,
+  floodSusceptibility: 0.16,
+  airQuality: 0.14,
+  healthcare: 0.10,
+  transit: 0.09,
+  connectivity: 0.08,
+  education: 0.08,
+  dailyNeeds: 0.07,
+  greenSpace: 0.07,
+  drainProximity: 0.06,
+  estimatedNoise: 0.06,
+  rainfall: 0.05,
+  safetyProxy: 0.04,
 }
 ```
 
-Unavailable metrics are omitted. Available weights are re-normalised. Evidence coverage and confidence lower the result confidence and only modestly adjust the visible rating so a weak source cannot decide an entire cell. See [docs/scoring-methodology.md](docs/scoring-methodology.md).
+Unavailable metrics are omitted and available weights re-normalised. Evidence coverage and confidence only modestly adjust the visible rating. The cell panel shows each metric's sub-score, weight, contribution and confidence. See [docs/scoring-methodology.md](docs/scoring-methodology.md).
 
 ## Deployment
 
@@ -182,34 +214,25 @@ The simplest deployment is Vercel:
 1. push this repository to GitHub;
 2. import it into Vercel as a Next.js project;
 3. set `NEXT_PUBLIC_APP_URL` to the production origin;
-4. keep the generated `public/data/hsr-bootstrap.json` in the deployment;
+4. keep the generated `public/data/{localityId}-bootstrap.json` files in the deployment;
 5. deploy with the standard `npm run build`.
 
-Do not run Overpass or KML ingestion inside a request handler. Regenerate the artifact locally or in a manually triggered/scheduled GitHub Action, review the source diff, then deploy it.
+Do not run Overpass or KML ingestion inside a request handler. Regenerate artifacts locally or in a manually triggered/scheduled GitHub Action, review the source diff, then deploy.
 
 Full notes: [docs/deployment.md](docs/deployment.md).
 
 ## Known limitations
 
-- Air quality is regional CAMS model output (approximately 45 km), not a street sensor.
+- Air quality is regional CAMS model output (~45 km grid), not a street sensor.
 - Weather is model-grid context, not a 100 m observation.
 - The 90 m DEM cannot represent basement, kerb, building-pad, or drain-condition details.
-- OpenStreetMap and the published KML layers may be incomplete or stale.
-- Five flood-evidence points fall inside the selected HSR locality polygon; absence elsewhere is not evidence of no flood susceptibility.
+- BBMP/OpenCity drain and flood KML coverage varies by locality; sparse coverage is shown explicitly.
 - The noise indicator is a low-confidence road/activity proxy, not measured decibels.
-- Network quality and property pricing are disabled because no adequate reusable HSR-cell dataset was verified.
-- The 7.1 MB uncompressed bootstrap prioritises a self-contained MVP; PMTiles/vector tiles are the next performance step.
-- Search is deliberately local to HSR. The public Nominatim endpoint rejected this environment and its policy forbids client autocomplete.
-
-## Roadmap
-
-1. Package the static geometry as PMTiles with zoom-based level of detail.
-2. Add versioned source manifests and ingestion diff review.
-3. Validate elevation and flood features against a higher-resolution civic dataset.
-4. Add cell time series without exposing personal movement.
-5. Add opt-in, privacy-preserving network measurements.
-6. Add cell-to-cell comparison.
-7. Expand beyond HSR only after the methodology is validated.
+- Livability signals (schools, healthcare, transit, retail, parks) are OSM-derived **access proxies**, not quality ratings; OSM completeness varies by locality.
+- Police proximity is a low-confidence safety proxy, **not a crime rate**. Karnataka crime data is city/district-level only.
+- Network quality, electricity reliability, and property pricing are disabled because no adequate per-cell dataset was verified.
+- Search is cross-locality and address-aware. The public Nominatim endpoint is not used at runtime (policy forbids client autocomplete).
+- Static intelligence (NDVI, UHI, metro, water, civic) is currently only populated for HSR Layout; other localities show unavailable for those signals.
 
 ## Data verification
 
