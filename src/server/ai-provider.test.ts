@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { generateAiText, isAiEnabled } from "./ai-provider";
+import { generateAiText, generateAiResult, isAiEnabled } from "./ai-provider";
 
 // Mock fetch globally for all tests in this file
 const mockFetch = vi.fn();
@@ -106,5 +106,47 @@ describe("generateAiText — with key", () => {
     mockFetch.mockResolvedValueOnce(geminiResponse(""));
     const result = await generateAiText("prompt");
     expect(result).toBeNull();
+  });
+});
+
+describe("generateAiResult — typed result variant", () => {
+  it("returns disabled when key is absent", async () => {
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: false, reason: "disabled" });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("returns ok with text on success", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockResolvedValueOnce(geminiResponse("Cell has good transit access."));
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: true, text: "Cell has good transit access." });
+  });
+
+  it("returns rate-limited on 429", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 429, text: async () => "quota exceeded" });
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: false, reason: "rate-limited" });
+  });
+
+  it("returns error on non-2xx non-429 status", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => "" });
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: false, reason: "error" });
+  });
+
+  it("returns error on invalid response shape", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ bad: "shape" }) });
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: false, reason: "error" });
+  });
+
+  it("returns error on network failure (does not throw)", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockRejectedValueOnce(new Error("offline"));
+    await expect(generateAiResult("prompt")).resolves.toEqual({ ok: false, reason: "error" });
   });
 });

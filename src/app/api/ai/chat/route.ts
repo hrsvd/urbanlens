@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assembleContext } from "@/server/ai-retrieval";
-import { generateAiText, isAiEnabled } from "@/server/ai-provider";
+import { generateAiResult, isAiEnabled } from "@/server/ai-provider";
 
 // ── Per-session in-memory rate limiter ────────────────────────────────────────
 // Each session ID (opaque client-generated string) gets a rolling window.
@@ -81,26 +81,31 @@ export async function POST(request: Request) {
 
   const rateCheck = checkRateLimit(sessionId);
   if (!rateCheck.allowed) {
-    return NextResponse.json(
-      {
-        reply: null,
-        rateLimited: true,
-        message:
-          "You have reached the hourly query limit (20 questions/hour). Please try again later.",
-      },
-      { status: 429 },
-    );
+    // Return as an assistant reply so the chat thread remains intact
+    return NextResponse.json({
+      reply:
+        "You've reached the hourly limit — this assistant runs on a free tier and caps at 20 questions per session per hour. Please try again after some time.",
+      rateLimited: true,
+    });
   }
 
   const ctx = await assembleContext(query);
 
   const fullPrompt = `${ctx.systemPrompt}\n\n${ctx.userTurn}`;
-  const reply = await generateAiText(fullPrompt, {
+  const result = await generateAiResult(fullPrompt, {
     maxTokens: 500,
     temperature: 0.25,
   });
 
-  if (!reply) {
+  if (!result.ok) {
+    if (result.reason === "rate-limited") {
+      // Gemini quota — return as an assistant reply, not an error, so the UI stays usable
+      return NextResponse.json({
+        reply:
+          "I've hit the free-tier API limit for now — the underlying model needs a short breather. Please try again in a minute or two.",
+        rateLimited: true,
+      });
+    }
     return NextResponse.json(
       { reply: null, error: "The assistant could not generate a response. Please try again." },
       { status: 502 },
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    reply,
+    reply: result.text,
     intent: ctx.intent,
     localitiesUsed: ctx.localities.map((l) => l.localityId),
     remaining: rateCheck.remaining,

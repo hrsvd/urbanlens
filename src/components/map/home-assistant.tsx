@@ -51,7 +51,6 @@ export function HomeAssistant({ open, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
-  const [rateLimited, setRateLimited] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -103,28 +102,13 @@ export function HomeAssistant({ open, onClose }: Props) {
         setDisabled(true);
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            text: data.message ?? "The assistant is not yet enabled.",
-          },
+          { role: "assistant", text: "The intelligence assistant is not yet enabled — no API key is configured." },
         ]);
         return;
       }
 
-      if (data.rateLimited) {
-        setRateLimited(true);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text:
-              data.message ??
-              "You've reached the hourly query limit. Please try again later.",
-          },
-        ]);
-        return;
-      }
-
+      // Rate-limited replies (both session and Gemini quota) arrive as normal assistant
+      // messages so the chat stays fully usable — the user can try again whenever ready.
       if (data.reply) {
         setMessages((prev) => [...prev, { role: "assistant", text: data.reply! }]);
       } else {
@@ -133,15 +117,15 @@ export function HomeAssistant({ open, onClose }: Props) {
           {
             role: "assistant",
             text:
-              data.error ??
-              "Something went wrong. Please try again.",
+              (typeof data.error === "string" ? data.error : null) ??
+              "Something didn't go right on my end. Please try again in a moment.",
           },
         ]);
       }
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: "Network error. Please check your connection and try again." },
+        { role: "assistant", text: "Network error — please check your connection and try again." },
       ]);
     } finally {
       setLoading(false);
@@ -247,22 +231,20 @@ export function HomeAssistant({ open, onClose }: Props) {
                 placeholder={
                   disabled
                     ? "Assistant not enabled"
-                    : rateLimited
-                    ? "Limit reached — try again later"
                     : "Ask about any Bengaluru locality…"
                 }
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={onKeyDown}
                 rows={2}
-                disabled={disabled || rateLimited}
-                aria-disabled={disabled || rateLimited}
+                disabled={disabled}
+                aria-disabled={disabled}
               />
               <button
                 type="button"
                 className="assistant-send"
                 onClick={() => void sendMessage()}
-                disabled={!inputValue.trim() || loading || disabled || rateLimited}
+                disabled={!inputValue.trim() || loading || disabled}
                 aria-label="Send"
               >
                 <Send size={15} aria-hidden="true" />

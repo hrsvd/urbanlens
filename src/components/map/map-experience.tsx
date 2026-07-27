@@ -44,6 +44,7 @@ export function MapExperience() {
   const activeLocality = useMapStore((state) => state.activeLocality);
   const setActiveLocality = useMapStore((state) => state.setActiveLocality);
   const selectedCellId = useMapStore((state) => state.selectedCellId);
+  const panelOpen = useMapStore((state) => state.panelOpen);
   const localityConfig = LOCALITIES[activeLocality];
 
   // Reset loader state during render when locality changes (derived state pattern).
@@ -215,32 +216,34 @@ export function MapExperience() {
       <SupportPanel open={supportOpen} onClose={() => setSupportOpen(false)} />
       <HomeAssistant open={assistantOpen} onClose={() => setAssistantOpen(false)} />
 
-      {/* Credit + support — fixed bottom-left, above OSM attribution */}
-      <div className="map-credit">
+      {/* Bottom-center cluster: Ask AI · Support · credit */}
+      <div className={`map-bottom-cluster${panelOpen ? " map-bottom-cluster--panel-open" : ""}`}>
+        <div className="map-bottom-actions">
+          <button
+            type="button"
+            className="map-bottom-btn map-bottom-btn--ai"
+            onClick={() => setAssistantOpen(true)}
+          >
+            <Bot size={12} aria-hidden="true" />
+            Ask AI
+          </button>
+          <span className="map-bottom-divider" aria-hidden="true" />
+          <button
+            type="button"
+            className="map-bottom-btn"
+            onClick={() => setSupportOpen(true)}
+          >
+            Support
+          </button>
+        </div>
         <a
           href="https://github.com/hrsvd"
           target="_blank"
           rel="noreferrer"
-          className="map-credit-author"
+          className="map-bottom-credit"
         >
-          Made with ♥ by Harsh
+          Made with ❤️ by Harsh
         </a>
-        <button
-          type="button"
-          className="map-credit-support"
-          onClick={() => setSupportOpen(true)}
-        >
-          Support
-        </button>
-        <button
-          type="button"
-          className="map-credit-assistant"
-          onClick={() => setAssistantOpen(true)}
-          aria-label="Open intelligence assistant"
-        >
-          <Bot size={12} aria-hidden="true" />
-          Ask AI
-        </button>
       </div>
 
       <div className="map-instruction" aria-hidden="true">

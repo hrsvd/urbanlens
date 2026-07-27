@@ -90,3 +90,65 @@ export async function generateAiText(
 export function isAiEnabled(): boolean {
   return Boolean(process.env.GEMINI_API_KEY?.trim());
 }
+
+// ── Typed result variant (distinguishes rate-limit from other failures) ────────
+
+export type AiGenerateResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "rate-limited" }
+  | { ok: false; reason: "disabled" }
+  | { ok: false; reason: "error" };
+
+/**
+ * Like generateAiText but returns a discriminated union so callers can
+ * treat 429 rate-limit responses differently from other failures.
+ */
+export async function generateAiResult(
+  prompt: string,
+  options: AiProviderOptions = {},
+): Promise<AiGenerateResult> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) return { ok: false, reason: "disabled" };
+
+  const { maxTokens = 400, temperature = 0.2 } = options;
+  const url = `${GEMINI_BASE}/models/${model()}:generateContent?key=${key}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    if (res.status === 429) {
+      console.error("[ai-provider] Gemini rate limit (429)");
+      return { ok: false, reason: "rate-limited" };
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[ai-provider] Gemini ${res.status}: ${body.slice(0, 200)}`);
+      return { ok: false, reason: "error" };
+    }
+
+    const parsed = GeminiResponseSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      console.error("[ai-provider] Unexpected Gemini response shape");
+      return { ok: false, reason: "error" };
+    }
+
+    const text = parsed.data.candidates[0].content.parts.map((p) => p.text).join("").trim();
+    return text ? { ok: true, text } : { ok: false, reason: "error" };
+  } catch (err) {
+    console.error("[ai-provider] Request failed:", err);
+    return { ok: false, reason: "error" };
+  }
+}

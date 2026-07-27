@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -292,7 +293,57 @@ function PanelSkeleton() {
 }
 
 // ── AI summary section ────────────────────────────────────────────────────────
-function AiSummarySection({ summary }: { summary: string | null | undefined }) {
+// Self-fetching: if the cell has no pre-generated summary, fires a live request
+// to /api/ai/cell-summary/:cellId and shows a loading state while in-flight.
+
+type SummaryState =
+  | { t: "has"; text: string }
+  | { t: "loading" }
+  | { t: "rate-limited" }
+  | { t: "error" }
+  | { t: "disabled" };
+
+function AiSummarySection({
+  cellId,
+  initialSummary,
+}: {
+  cellId: string;
+  initialSummary: string | null | undefined;
+}) {
+  // State is derived once at mount. When the cell changes, the parent renders this
+  // with key={cell.id} which remounts the component — no synchronous setState needed.
+  const [state, setState] = useState<SummaryState>(
+    () => (initialSummary ? { t: "has", text: initialSummary } : { t: "loading" }),
+  );
+
+  useEffect(() => {
+    // If we already have a summary (pre-generated or previous live result), nothing to do.
+    if (state.t !== "loading") return;
+
+    const controller = new AbortController();
+    fetch(`/api/ai/cell-summary/${encodeURIComponent(cellId)}`, {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json() as {
+          summary?: string | null;
+          disabled?: boolean;
+          rateLimited?: boolean;
+          error?: boolean;
+        };
+        if (data.disabled) setState({ t: "disabled" });
+        else if (data.rateLimited) setState({ t: "rate-limited" });
+        else if (data.summary) setState({ t: "has", text: data.summary });
+        else setState({ t: "error" });
+      })
+      .catch((err: unknown) => {
+        if ((err as Error).name !== "AbortError") setState({ t: "error" });
+      });
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty: runs once on mount; cell changes remount via key={cell.id}
+
   return (
     <section className="ai-summary-section" aria-label="AI-generated summary">
       <div className="ai-summary-header">
@@ -300,13 +351,29 @@ function AiSummarySection({ summary }: { summary: string | null | undefined }) {
         <span>Plain-language summary</span>
         <em className="ai-badge">AI · grounded</em>
       </div>
-      {summary ? (
-        <p className="ai-summary-text">{summary}</p>
-      ) : (
+
+      {state.t === "loading" && (
+        <p className="ai-summary-generating" aria-live="polite">
+          <span className="ai-summary-spinner" aria-hidden="true" />
+          Generating summary…
+        </p>
+      )}
+      {state.t === "has" && (
+        <p className="ai-summary-text">{state.text}</p>
+      )}
+      {state.t === "rate-limited" && (
+        <p className="ai-summary-rate-limited">
+          AI summary is limited per user on the free tier — try another area shortly.
+        </p>
+      )}
+      {state.t === "error" && (
         <p className="ai-summary-placeholder">
-          AI summary will appear here once enabled. Run{" "}
-          <code>npm run ai:summaries</code> after adding your{" "}
-          <code>GEMINI_API_KEY</code>.
+          Summary couldn&apos;t be generated right now. Try again shortly.
+        </p>
+      )}
+      {state.t === "disabled" && (
+        <p className="ai-summary-placeholder">
+          Add a <code>GEMINI_API_KEY</code> to enable AI summaries.
         </p>
       )}
     </section>
@@ -423,8 +490,8 @@ export function IntelligencePanel({
                 </div>
               </section>
 
-              {/* AI plain-language summary — directly below composite score */}
-              <AiSummarySection summary={cell.aiSummary} />
+              {/* AI plain-language summary — fetched live if not pre-generated; key forces remount on cell change */}
+              <AiSummarySection key={cell.id} cellId={cell.id} initialSummary={cell.aiSummary} />
 
               {context && (
                 <div className="place-context">
