@@ -138,7 +138,9 @@ The current uncompressed GeoJSON per locality is acceptable for an MVP and compr
 All LLM calls are routed through a single module that wraps the Gemini REST API. Swapping model or provider is a one-file change. The module:
 
 - returns `null` (never throws) on missing Gemini configuration, API error, non-2xx response, Zod validation failure, or timeout;
-- validates the response with Zod before extracting text;
+- validates the response with Zod, joins all candidate text parts in order, and rejects incomplete/abnormal finish reasons;
+- logs finish reason and token-count metadata without prompts, keys, or raw responses;
+- reads the shared output budget from `GEMINI_MAX_OUTPUT_TOKENS` (safe default `1024`);
 - reads the model name from `GEMINI_MODEL`, with no model name hardcoded in application logic.
 
 `isAiEnabled()` exposes complete key-and-model configuration so components and routes can render clean placeholder UI without a try/catch.
@@ -153,6 +155,8 @@ All LLM calls are routed through a single module that wraps the Gemini REST API.
 - Output: `public/data/{localityId}-cell-summaries.json` (`{ cellId: summaryText }`).
 
 The cell metrics API (`GET /api/cells/:id/metrics`) reads this file and attaches `aiSummary` to the `AnalysisCell` response. The intelligence panel displays it below the composite score with a placeholder when the key is absent.
+
+When no completed summary is cached, `GET /api/ai/cell-summary/:cellId` uses Gemini `streamGenerateContent` and forwards parsed text parts as SSE events. The browser appends each chunk progressively and aborts the request when the selected cell changes. The in-process overlay is written only after a normal `STOP`; incomplete, failed, rate-limited, or aborted streams are not cached.
 
 ### Feature: home-screen intelligence assistant (live, retrieval-before-generation)
 

@@ -44,7 +44,7 @@ For the initial release, this file is only fully populated for HSR Layout. Other
 
 ## AI cell summaries
 
-`public/data/{localityId}-cell-summaries.json` contains pre-generated natural-language summaries, one per cell ID, produced by `scripts/generate-ai-summaries.mjs`. The summaries are derived exclusively from the bootstrap artifact and static intelligence file — no live or external data is included. They follow the same "same cadence as bootstrap" rule: regenerate after each ingestion run if cell data changed, and only if `GEMINI_API_KEY` and `GEMINI_MODEL` are set. The generation script is incremental (skips already-generated cells) and rate-limited (1.1 s/request). The map functions fully without these files — cells show a placeholder until summaries are generated.
+`public/data/{localityId}-cell-summaries.json` contains pre-generated natural-language summaries, one per cell ID, produced by `scripts/generate-ai-summaries.mjs`. The summaries are derived exclusively from the bootstrap artifact and static intelligence file — no live or external data is included. They follow the same "same cadence as bootstrap" rule: regenerate after each ingestion run if cell data changed, and only if `GEMINI_API_KEY` and `GEMINI_MODEL` are set. The generation script uses the shared `GEMINI_MAX_OUTPUT_TOKENS` budget, saves only normally completed responses, is incremental (skips already-generated cells), and is rate-limited (1.1 s/request). The map functions fully without these files — cells show a placeholder until summaries are generated.
 
 ## Recommended operational cadence
 

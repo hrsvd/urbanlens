@@ -1503,6 +1503,11 @@ button {
   color: var(--muted);
 }
 
+.ai-summary-text .ai-summary-spinner {
+  margin-left: 0.45rem;
+  vertical-align: -0.05rem;
+}
+
 .ai-summary-placeholder {
   margin: 0;
   font-size: 0.7rem;

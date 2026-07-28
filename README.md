@@ -111,11 +111,14 @@ The repository already contains a generated HSR artifact. Re-run ingestion when 
 
 ## Environment variables
 
-No secret keys are required.
+No secret keys are required for the core map. Gemini configuration is optional and enables the AI surfaces.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Metadata/deployment origin |
+| `GEMINI_API_KEY` | unset | Optional Gemini REST API key |
+| `GEMINI_MODEL` | unset | Gemini model used by both AI features |
+| `GEMINI_MAX_OUTPUT_TOKENS` | `1024` | Shared maximum output-token budget for Gemini responses |
 | `MAP_DATA_MODE` | `local` | Documents the local artifact mode |
 | `GRID_SIZE_METERS` | `100` | Ingestion-time square cell size |
 | `OPEN_METEO_BASE_URL` | `https://api.open-meteo.com` | Weather adapter |

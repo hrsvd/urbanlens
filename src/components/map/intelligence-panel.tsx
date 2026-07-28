@@ -299,11 +299,33 @@ function PanelSkeleton() {
 type SummaryState =
   | { t: "has"; text: string }
   | { t: "loading" }
+  | { t: "streaming"; text: string }
   | { t: "rate-limited"; message: string }
   | { t: "error" }
   | { t: "disabled" };
 
-function AiSummarySection({
+type SummaryStreamData = {
+  text?: string;
+  reason?: string;
+  message?: string;
+};
+
+function parseSummaryStreamEvent(block: string): {
+  event: string;
+  data: SummaryStreamData;
+} | null {
+  const lines = block.split("\n");
+  const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+  const rawData = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+
+  if (!event || !rawData) return null;
+  return { event, data: JSON.parse(rawData) as SummaryStreamData };
+}
+
+export function AiSummarySection({
   cellId,
   initialSummary,
 }: {
@@ -321,33 +343,114 @@ function AiSummarySection({
     if (state.t !== "loading") return;
 
     const controller = new AbortController();
-    fetch(`/api/ai/cell-summary/${encodeURIComponent(cellId)}`, {
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        const data = await res.json() as {
-          summary?: string | null;
-          disabled?: boolean;
-          rateLimited?: boolean;
-          message?: string;
-          error?: boolean;
-        };
-        if (data.disabled) setState({ t: "disabled" });
-        else if (data.rateLimited) {
-          setState({
-            t: "rate-limited",
-            message:
-              data.message
-              ?? "Rate limit exceeded for the free Gemini version. Please try again in a little while.",
-          });
-        } else if (data.summary) setState({ t: "has", text: data.summary });
-        else setState({ t: "error" });
-      })
-      .catch((err: unknown) => {
-        if ((err as Error).name !== "AbortError") setState({ t: "error" });
-      });
+    let active = true;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-    return () => controller.abort();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/ai/cell-summary/${encodeURIComponent(cellId)}`, {
+          signal: controller.signal,
+        });
+        const contentType = response.headers.get("content-type") ?? "";
+
+        if (contentType.includes("application/json")) {
+          const data = await response.json() as {
+            summary?: string | null;
+            disabled?: boolean;
+            rateLimited?: boolean;
+            message?: string;
+            error?: boolean;
+          };
+          if (!active) return;
+
+          if (data.disabled) setState({ t: "disabled" });
+          else if (data.rateLimited) {
+            setState({
+              t: "rate-limited",
+              message:
+                data.message
+                ?? "Rate limit exceeded for the free Gemini version. Please try again in a little while.",
+            });
+          } else if (data.summary) setState({ t: "has", text: data.summary });
+          else setState({ t: "error" });
+          return;
+        }
+
+        if (!response.ok || !response.body) {
+          if (active) setState({ t: "error" });
+          return;
+        }
+
+        reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let accumulatedText = "";
+        let terminalEventSeen = false;
+
+        const processBlock = (block: string) => {
+          const streamEvent = parseSummaryStreamEvent(block);
+          if (!streamEvent || !active) return;
+
+          if (streamEvent.event === "chunk" && streamEvent.data.text) {
+            accumulatedText += streamEvent.data.text;
+            setState({ t: "streaming", text: accumulatedText });
+            return;
+          }
+
+          if (streamEvent.event === "complete") {
+            terminalEventSeen = true;
+            const completeText = streamEvent.data.text ?? accumulatedText;
+            setState(completeText ? { t: "has", text: completeText } : { t: "error" });
+            return;
+          }
+
+          if (streamEvent.event === "error") {
+            terminalEventSeen = true;
+            if (streamEvent.data.reason === "rate-limited") {
+              setState({
+                t: "rate-limited",
+                message:
+                  streamEvent.data.message
+                  ?? "Rate limit exceeded for the free Gemini version. Please try again in a little while.",
+              });
+            } else {
+              setState({ t: "error" });
+            }
+          }
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replaceAll("\r\n", "\n");
+          const blocks = buffer.split("\n\n");
+          buffer = blocks.pop() ?? "";
+          blocks.forEach(processBlock);
+        }
+
+        buffer += decoder.decode();
+        if (buffer.trim()) processBlock(buffer.replaceAll("\r\n", "\n"));
+        if (active && !terminalEventSeen) setState({ t: "error" });
+      } catch (error) {
+        if (active && (error as Error).name !== "AbortError") {
+          setState({ t: "error" });
+        }
+      } finally {
+        try {
+          reader?.releaseLock();
+        } catch {
+          // The cleanup path may already have cancelled and released the reader.
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+      if (reader) void reader.cancel().catch(() => undefined);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Intentionally empty: runs once on mount; cell changes remount via key={cell.id}
 
@@ -367,6 +470,12 @@ function AiSummarySection({
       )}
       {state.t === "has" && (
         <p className="ai-summary-text">{state.text}</p>
+      )}
+      {state.t === "streaming" && (
+        <p className="ai-summary-text" aria-live="polite">
+          {state.text}
+          <span className="ai-summary-spinner" aria-hidden="true" />
+        </p>
       )}
       {state.t === "rate-limited" && (
         <p className="ai-summary-rate-limited">

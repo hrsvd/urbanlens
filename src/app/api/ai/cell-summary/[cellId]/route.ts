@@ -13,7 +13,7 @@ import {
 } from "@/server/data";
 import {
   GEMINI_RATE_LIMIT_MESSAGE,
-  generateAiResult,
+  generateAiStream,
   isAiEnabled,
 } from "@/server/ai-provider";
 
@@ -99,10 +99,17 @@ STRICT RULES:
 CELL DATA:
 `;
 
+const SUMMARY_ERROR_MESSAGE = "Summary couldn't be generated right now. Try again shortly.";
+const textEncoder = new TextEncoder();
+
+function encodeStreamEvent(event: string, data: unknown): Uint8Array {
+  return textEncoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 // ── Route handler ──────────────────────────────────────────────────────────────
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ cellId: string }> },
 ) {
   const { cellId } = await params;
@@ -140,20 +147,113 @@ export async function GET(
   const context = buildCellContext(cell, intelligence, localityId);
   const prompt = `${PROMPT_PREFIX}${JSON.stringify(context, null, 2)}\n\nWrite the plain-language summary:`;
 
-  const result = await generateAiResult(prompt, { maxTokens: 200, temperature: 0.15 });
+  const upstreamController = new AbortController();
+  const abortUpstream = () => upstreamController.abort();
+  if (request.signal.aborted) abortUpstream();
+  else request.signal.addEventListener("abort", abortUpstream, { once: true });
+
+  const result = await generateAiStream(prompt, {
+    temperature: 0.15,
+    signal: upstreamController.signal,
+  });
 
   if (!result.ok) {
+    request.signal.removeEventListener("abort", abortUpstream);
     if (result.reason === "rate-limited") {
       return NextResponse.json(
         { summary: null, rateLimited: true, message: GEMINI_RATE_LIMIT_MESSAGE },
         { status: 429 },
       );
     }
+    if (result.reason === "disabled") {
+      return NextResponse.json({ summary: null, disabled: true });
+    }
+    if (result.reason === "aborted" && request.signal.aborted) {
+      return new Response(null, { status: 499 });
+    }
     return NextResponse.json({ summary: null, error: true }, { status: 502 });
   }
 
-  // Cache in overlay so repeated requests in this process skip the LLM
-  setCachedSummary(cellId, result.text);
+  let closed = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // The browser may already have cancelled the response body.
+        }
+      };
 
-  return NextResponse.json({ summary: result.text, cached: false });
+      const send = (event: string, data: unknown) => {
+        if (closed || upstreamController.signal.aborted) return;
+        controller.enqueue(encodeStreamEvent(event, data));
+      };
+
+      void (async () => {
+        let accumulatedText = "";
+        let terminalEventSeen = false;
+
+        try {
+          for await (const event of result.events) {
+            if (upstreamController.signal.aborted) break;
+
+            if (event.type === "text") {
+              accumulatedText += event.text;
+              send("chunk", { text: event.text });
+              continue;
+            }
+
+            terminalEventSeen = true;
+            if (event.type === "complete") {
+              const completeText = accumulatedText.trim();
+              if (!completeText) {
+                send("error", { reason: "error", message: SUMMARY_ERROR_MESSAGE });
+              } else {
+                // Cache only after Gemini reports normal completion.
+                setCachedSummary(cellId, completeText);
+                send("complete", { text: completeText });
+              }
+            } else {
+              send("error", {
+                reason: event.reason,
+                message:
+                  event.reason === "rate-limited"
+                    ? GEMINI_RATE_LIMIT_MESSAGE
+                    : SUMMARY_ERROR_MESSAGE,
+              });
+            }
+            break;
+          }
+
+          if (!terminalEventSeen && !upstreamController.signal.aborted) {
+            send("error", { reason: "error", message: SUMMARY_ERROR_MESSAGE });
+          }
+        } catch {
+          if (!upstreamController.signal.aborted) {
+            send("error", { reason: "error", message: SUMMARY_ERROR_MESSAGE });
+          }
+        } finally {
+          request.signal.removeEventListener("abort", abortUpstream);
+          close();
+        }
+      })();
+    },
+    cancel() {
+      closed = true;
+      abortUpstream();
+      request.signal.removeEventListener("abort", abortUpstream);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

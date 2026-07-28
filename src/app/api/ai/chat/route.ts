@@ -97,7 +97,6 @@ export async function POST(request: Request) {
 
   const fullPrompt = `${ctx.systemPrompt}\n\n${ctx.userTurn}`;
   const result = await generateAiResult(fullPrompt, {
-    maxTokens: 500,
     temperature: 0.25,
   });
 

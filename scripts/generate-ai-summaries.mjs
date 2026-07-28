@@ -24,6 +24,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getGeminiMaxOutputTokens } from "../src/lib/gemini-config.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -174,19 +175,46 @@ async function callGemini(prompt) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 200, temperature: 0.15 },
+      generationConfig: {
+        maxOutputTokens: getGeminiMaxOutputTokens(),
+        temperature: 0.15,
+      },
     }),
     signal: AbortSignal.timeout(25_000),
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Gemini ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Gemini request failed with status ${res.status}`);
   }
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  const candidate = data?.candidates?.[0];
+  const usage = data?.usageMetadata;
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts
+    ?.map((part) => typeof part?.text === "string" ? part.text : "")
+    .join("")
+    .trim();
+  console.info(
+    `[ai-provider] Gemini completion metadata: finishReason=${finishReason ?? "unknown"} `
+    + `promptTokens=${usage?.promptTokenCount ?? "unknown"} `
+    + `candidateTokens=${usage?.candidatesTokenCount ?? "unknown"} `
+    + `totalTokens=${usage?.totalTokenCount ?? "unknown"}`,
+  );
+
   if (!text) throw new Error("Empty response from Gemini");
+  if (!finishReason) {
+    throw new Error("Gemini response ended without a normal finish reason.");
+  }
+  if (finishReason === "MAX_TOKENS") {
+    throw new Error(
+      "Gemini response ended because the maximum output-token limit was reached.",
+    );
+  }
+  if (finishReason && finishReason !== "STOP") {
+    throw new Error(`Gemini response ended with finishReason=${finishReason}.`);
+  }
+
   return text;
 }
 

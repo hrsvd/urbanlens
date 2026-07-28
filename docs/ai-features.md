@@ -22,8 +22,8 @@ When a user opens a cell that has no pre-generated summary, the intelligence pan
 
 1. Checks an in-process memory overlay first (instant if a previous visitor already triggered generation in this server process).
 2. Falls back to the file-based pre-generated map (`public/data/{localityId}-cell-summaries.json`) if it exists.
-3. If neither cache has the cell, calls Gemini live with the same grounding prompt used by the offline script.
-4. Stores the result in the in-process overlay so the next request for that cell in the same process returns immediately.
+3. If neither cache has the cell, calls Gemini's streaming REST endpoint with the same grounding prompt used by the offline script and forwards text chunks to the panel over SSE.
+4. Stores the result in the in-process overlay only after Gemini reports normal completion. Partial, failed, rate-limited, and aborted streams are never cached.
 
 **Rate-limit handling**: if Gemini returns 429 or an equivalent quota response, the panel shows "Rate limit exceeded for the free Gemini version. Please try again in a little while." — a calm, intentional-looking state, not an error.
 
@@ -44,7 +44,7 @@ The grounding prompt (used by both paths):
 ### Storage
 
 Pre-generated summaries: `public/data/{localityId}-cell-summaries.json` — a flat `{ cellId: summaryText }` map.  
-Live-generated summaries: in-process memory overlay (`liveSummaryOverlay` in `src/server/data.ts`), reset on server restart.  
+Live-generated summaries: progressively rendered from SSE, then stored in the in-process memory overlay (`liveSummaryOverlay` in `src/server/data.ts`) only after normal completion; the overlay resets on server restart.
 The cell metrics API (`GET /api/cells/:id/metrics`) still reads the file-based map and returns `aiSummary` if present; the intelligence panel fetches live summaries separately via `GET /api/ai/cell-summary/:cellId`.
 
 ### Context sent to the model
@@ -81,7 +81,7 @@ A conversational interface that answers natural-language questions about Bengalu
    - `broad`: all 8 locality rollups
 3. **Address resolution** — for `address` intent, the existing search index is queried to find a named match for the address hint.
 4. **Grounded prompt assembly** — locality rollups are serialised as JSON and passed inline. The system prompt contains the same explicit grounding rules as the cell summary feature.
-5. **LLM call** — `generateAiText` with `maxTokens: 500`, `temperature: 0.25`.
+5. **LLM call** — `generateAiResult` with the shared environment-configured output-token budget and `temperature: 0.25`.
 
 ### Rate limiting
 
@@ -133,8 +133,11 @@ STRICT RULES — violating any of these is a critical error:
 |---|---|---|
 | `GEMINI_API_KEY` | _(unset)_ | Gemini REST API key. When absent, AI features are gracefully disabled. |
 | `GEMINI_MODEL` | _(unset)_ | Gemini model used by both features. Required when AI features are enabled. |
+| `GEMINI_MAX_OUTPUT_TOKENS` | `1024` | Maximum Gemini output budget used by summaries and Ask AI. Invalid or missing values safely fall back to 1024. |
 
 ## Testing
 
 - `src/server/ai-provider.test.ts` — unit tests with mocked `fetch`. Covers: unconfigured paths, successful extraction, prompt config forwarding, model env override, rate-limit responses, non-2xx errors, Zod mismatch, network errors, whitespace trim, and empty strings.
+- `src/app/api/ai/cell-summary/[cellId]/route.test.ts` — streaming, completion-only caching, rate limits, upstream failure, cached responses, and cancellation.
+- `src/components/map/intelligence-panel.test.tsx` — progressive rendering, exact final text, stale-cell cancellation, friendly rate limits, and incomplete-generation UI.
 - `src/server/ai-retrieval.test.ts` — 15 unit tests with mocked data layer. Covers: all intent kinds, intelligence summarisation, null intelligence, broad mode fetching all localities, graceful failure when a locality file is missing, system prompt content, cell count.
