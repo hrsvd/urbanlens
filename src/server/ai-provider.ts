@@ -19,8 +19,17 @@ const GeminiResponseSchema = z.object({
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 function model() {
-  return process.env.GEMINI_MODEL?.trim() || "gemini-1.5-flash";
+  return process.env.GEMINI_MODEL?.trim();
 }
+
+function isGeminiRateLimitResponse(status: number, body: string): boolean {
+  return status === 429
+    || /"status"\s*:\s*"RESOURCE_EXHAUSTED"/i.test(body)
+    || /"reason"\s*:\s*"(?:RATE_LIMIT_EXCEEDED|QUOTA_EXCEEDED)"/i.test(body);
+}
+
+export const GEMINI_RATE_LIMIT_MESSAGE =
+  "Rate limit exceeded for the free Gemini version. Please try again in a little while.";
 
 export type AiProviderOptions = {
   /** Maximum output tokens (default 400) */
@@ -33,7 +42,7 @@ export type AiProviderOptions = {
  * Generates text using the Gemini REST API.
  *
  * Returns null without throwing when:
- * - GEMINI_API_KEY is not set (graceful no-key mode)
+ * - GEMINI_API_KEY or GEMINI_MODEL is not set (graceful disabled mode)
  * - The API returns a non-2xx status
  * - The response fails Zod validation
  * - The request times out (20 s)
@@ -46,10 +55,11 @@ export async function generateAiText(
   options: AiProviderOptions = {},
 ): Promise<string | null> {
   const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) return null;
+  const configuredModel = model();
+  if (!key || !configuredModel) return null;
 
   const { maxTokens = 400, temperature = 0.2 } = options;
-  const url = `${GEMINI_BASE}/models/${model()}:generateContent?key=${key}`;
+  const url = `${GEMINI_BASE}/models/${configuredModel}:generateContent?key=${key}`;
 
   try {
     const res = await fetch(url, {
@@ -86,9 +96,9 @@ export async function generateAiText(
   }
 }
 
-/** True only when GEMINI_API_KEY is set in the environment. */
+/** True only when GEMINI_API_KEY and GEMINI_MODEL are set in the environment. */
 export function isAiEnabled(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY?.trim());
+  return Boolean(process.env.GEMINI_API_KEY?.trim() && model());
 }
 
 // ── Typed result variant (distinguishes rate-limit from other failures) ────────
@@ -108,10 +118,11 @@ export async function generateAiResult(
   options: AiProviderOptions = {},
 ): Promise<AiGenerateResult> {
   const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) return { ok: false, reason: "disabled" };
+  const configuredModel = model();
+  if (!key || !configuredModel) return { ok: false, reason: "disabled" };
 
   const { maxTokens = 400, temperature = 0.2 } = options;
-  const url = `${GEMINI_BASE}/models/${model()}:generateContent?key=${key}`;
+  const url = `${GEMINI_BASE}/models/${configuredModel}:generateContent?key=${key}`;
 
   try {
     const res = await fetch(url, {
@@ -128,13 +139,12 @@ export async function generateAiResult(
       signal: AbortSignal.timeout(20_000),
     });
 
-    if (res.status === 429) {
-      console.error("[ai-provider] Gemini rate limit (429)");
-      return { ok: false, reason: "rate-limited" };
-    }
-
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (isGeminiRateLimitResponse(res.status, body)) {
+        console.error("[ai-provider] Gemini rate limit");
+        return { ok: false, reason: "rate-limited" };
+      }
       console.error(`[ai-provider] Gemini ${res.status}: ${body.slice(0, 200)}`);
       return { ok: false, reason: "error" };
     }

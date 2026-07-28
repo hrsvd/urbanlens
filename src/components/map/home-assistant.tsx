@@ -102,7 +102,7 @@ export function HomeAssistant({ open, onClose }: Props) {
         setDisabled(true);
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "The intelligence assistant is not yet enabled — no API key is configured." },
+          { role: "assistant", text: "The intelligence assistant is not yet enabled — Gemini is not fully configured." },
         ]);
         return;
       }

@@ -11,7 +11,7 @@
  *   node --env-file=.env.local scripts/generate-ai-summaries.mjs --locality all
  *   node --env-file=.env.local scripts/generate-ai-summaries.mjs --locality hsr --force
  *
- * Requires GEMINI_API_KEY to be set (e.g. in .env.local).
+ * Requires GEMINI_API_KEY and GEMINI_MODEL to be set (e.g. in .env.local).
  * Run with Node 20.11+ for --env-file support.
  *
  * Rate limiting: 1 request/second by default (safe for Gemini free tier).
@@ -34,7 +34,7 @@ const LOCALITIES = [
 
 const RATE_LIMIT_MS = 1100; // 1.1 s between requests
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim();
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -50,10 +50,10 @@ const targets = localityArg === "all" ? LOCALITIES : [localityArg];
 
 // ── API key check ─────────────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY?.trim();
-if (!apiKey) {
+if (!apiKey || !GEMINI_MODEL) {
   console.error(
-    "\nError: GEMINI_API_KEY is not set.\n" +
-    "Add it to .env.local and run with:\n" +
+    "\nError: GEMINI_API_KEY and GEMINI_MODEL must both be set.\n" +
+    "Add them to .env.local and run with:\n" +
     "  node --env-file=.env.local scripts/generate-ai-summaries.mjs --locality <id>\n",
   );
   process.exit(1);

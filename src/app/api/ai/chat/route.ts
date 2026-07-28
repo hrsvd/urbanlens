@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { assembleContext } from "@/server/ai-retrieval";
-import { generateAiResult, isAiEnabled } from "@/server/ai-provider";
+import {
+  GEMINI_RATE_LIMIT_MESSAGE,
+  generateAiResult,
+  isAiEnabled,
+} from "@/server/ai-provider";
 
 // ── Per-session in-memory rate limiter ────────────────────────────────────────
 // Each session ID (opaque client-generated string) gets a rolling window.
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
       {
         reply: null,
         disabled: true,
-        message: "The assistant is not yet enabled. Ask the site author to add a Gemini API key.",
+        message: "The assistant is not yet enabled. Ask the site author to configure Gemini.",
       },
       { status: 200 },
     );
@@ -101,8 +105,7 @@ export async function POST(request: Request) {
     if (result.reason === "rate-limited") {
       // Gemini quota — return as an assistant reply, not an error, so the UI stays usable
       return NextResponse.json({
-        reply:
-          "I've hit the free-tier API limit for now — the underlying model needs a short breather. Please try again in a minute or two.",
+        reply: GEMINI_RATE_LIMIT_MESSAGE,
         rateLimited: true,
       });
     }

@@ -1,12 +1,12 @@
 # AI features
 
-UrbanLens includes two AI-powered features built on top of the existing ingested locality data. Both are optional — the application works fully without an API key. When no key is set, every AI surface shows a clean placeholder, never a raw error.
+UrbanLens includes two AI-powered features built on top of the existing ingested locality data. Both are optional — the application works fully without Gemini configuration. When the key or model is not set, every AI surface shows a clean placeholder, never a raw error.
 
 ## Design principles
 
 1. **Grounding over generation.** Every AI call provides the data inline and instructs the model explicitly to use only that data, never invent numbers, and never extrapolate. If a field is null, the summary must say it is unavailable.
 2. **One provider module.** `src/server/ai-provider.ts` is the only file that calls the Gemini REST API. Switching model or provider requires changing one file.
-3. **Key in env, never in code.** `GEMINI_API_KEY` is read from the environment. It never appears in any committed file.
+3. **Gemini configuration in env, never in code.** `GEMINI_API_KEY` and `GEMINI_MODEL` are read from the environment. Neither has an application-code fallback.
 4. **No individual scoring.** Neither feature scores, rates, or draws conclusions about individual apartments, buildings, or residents. Analysis is cell-level (100 m × 100 m) or locality-level.
 5. **Crime context is city-wide.** If asked about crime, the assistant states that only NCRB city-wide data is available and does not associate crime with any locality or cell.
 
@@ -25,7 +25,7 @@ When a user opens a cell that has no pre-generated summary, the intelligence pan
 3. If neither cache has the cell, calls Gemini live with the same grounding prompt used by the offline script.
 4. Stores the result in the in-process overlay so the next request for that cell in the same process returns immediately.
 
-**Rate-limit handling**: if Gemini returns 429, the panel shows "AI summary is limited per user on the free tier — try another area shortly." — a calm, intentional-looking state, not an error.
+**Rate-limit handling**: if Gemini returns 429 or an equivalent quota response, the panel shows "Rate limit exceeded for the free Gemini version. Please try again in a little while." — a calm, intentional-looking state, not an error.
 
 ### Optional pre-generation (batch warm-up)
 
@@ -68,7 +68,7 @@ For each cell:
 
 ### What it does
 
-A conversational interface that answers natural-language questions about Bengaluru localities. Accessible via the "Ask AI" button in the map credit bar. The assistant is a chat panel with message history, a typing indicator, and rate-limit / no-key states.
+A conversational interface that answers natural-language questions about Bengaluru localities. Accessible via the "Ask AI" button in the map credit bar. The assistant is a chat panel with message history, a typing indicator, and rate-limit / unconfigured states.
 
 ### How it works
 
@@ -132,9 +132,9 @@ STRICT RULES — violating any of these is a critical error:
 | Variable | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | _(unset)_ | Gemini REST API key. When absent, AI features are gracefully disabled. |
-| `GEMINI_MODEL` | `gemini-1.5-flash` | Model override for both features. |
+| `GEMINI_MODEL` | _(unset)_ | Gemini model used by both features. Required when AI features are enabled. |
 
 ## Testing
 
-- `src/server/ai-provider.test.ts` — 12 unit tests with mocked `fetch`. Covers: no-key path, successful extraction, prompt config forwarding, model env override, non-2xx, Zod mismatch, network error, whitespace trim, empty string.
+- `src/server/ai-provider.test.ts` — unit tests with mocked `fetch`. Covers: unconfigured paths, successful extraction, prompt config forwarding, model env override, rate-limit responses, non-2xx errors, Zod mismatch, network errors, whitespace trim, and empty strings.
 - `src/server/ai-retrieval.test.ts` — 15 unit tests with mocked data layer. Covers: all intent kinds, intelligence summarisation, null intelligence, broad mode fetching all localities, graceful failure when a locality file is missing, system prompt content, cell count.

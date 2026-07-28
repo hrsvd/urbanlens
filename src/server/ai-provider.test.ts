@@ -33,7 +33,13 @@ describe("isAiEnabled", () => {
 
   it("returns true when GEMINI_API_KEY is set", () => {
     process.env.GEMINI_API_KEY = "test-key-123";
+    process.env.GEMINI_MODEL = "configured-model";
     expect(isAiEnabled()).toBe(true);
+  });
+
+  it("returns false when GEMINI_MODEL is not set", () => {
+    process.env.GEMINI_API_KEY = "test-key-123";
+    expect(isAiEnabled()).toBe(false);
   });
 });
 
@@ -48,6 +54,7 @@ describe("generateAiText — no key", () => {
 describe("generateAiText — with key", () => {
   beforeEach(() => {
     process.env.GEMINI_API_KEY = "test-key-xyz";
+    process.env.GEMINI_MODEL = "configured-model";
   });
 
   it("returns extracted text on success", async () => {
@@ -60,7 +67,7 @@ describe("generateAiText — with key", () => {
     mockFetch.mockResolvedValueOnce(geminiResponse("ok"));
     await generateAiText("Test prompt", { maxTokens: 250, temperature: 0.3 });
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("gemini-1.5-flash");
+    expect(url).toContain("configured-model");
     expect(url).toContain("test-key-xyz");
     const body = JSON.parse(options.body as string);
     expect(body.contents[0].parts[0].text).toBe("Test prompt");
@@ -110,6 +117,10 @@ describe("generateAiText — with key", () => {
 });
 
 describe("generateAiResult — typed result variant", () => {
+  beforeEach(() => {
+    process.env.GEMINI_MODEL = "configured-model";
+  });
+
   it("returns disabled when key is absent", async () => {
     const result = await generateAiResult("prompt");
     expect(result).toEqual({ ok: false, reason: "disabled" });
@@ -126,6 +137,17 @@ describe("generateAiResult — typed result variant", () => {
   it("returns rate-limited on 429", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     mockFetch.mockResolvedValueOnce({ ok: false, status: 429, text: async () => "quota exceeded" });
+    const result = await generateAiResult("prompt");
+    expect(result).toEqual({ ok: false, reason: "rate-limited" });
+  });
+
+  it("returns rate-limited for Gemini RESOURCE_EXHAUSTED responses", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: async () => '{"error":{"status":"RESOURCE_EXHAUSTED"}}',
+    });
     const result = await generateAiResult("prompt");
     expect(result).toEqual({ ok: false, reason: "rate-limited" });
   });

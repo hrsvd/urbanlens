@@ -11,7 +11,11 @@ import {
   localityForCell,
   setCachedSummary,
 } from "@/server/data";
-import { generateAiResult, isAiEnabled } from "@/server/ai-provider";
+import {
+  GEMINI_RATE_LIMIT_MESSAGE,
+  generateAiResult,
+  isAiEnabled,
+} from "@/server/ai-provider";
 
 // ── Context builder ───────────────────────────────────────────────────────────
 // Mirrors the logic in scripts/generate-ai-summaries.mjs so offline-generated
@@ -140,7 +144,10 @@ export async function GET(
 
   if (!result.ok) {
     if (result.reason === "rate-limited") {
-      return NextResponse.json({ summary: null, rateLimited: true }, { status: 429 });
+      return NextResponse.json(
+        { summary: null, rateLimited: true, message: GEMINI_RATE_LIMIT_MESSAGE },
+        { status: 429 },
+      );
     }
     return NextResponse.json({ summary: null, error: true }, { status: 502 });
   }

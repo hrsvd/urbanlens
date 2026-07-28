@@ -299,7 +299,7 @@ function PanelSkeleton() {
 type SummaryState =
   | { t: "has"; text: string }
   | { t: "loading" }
-  | { t: "rate-limited" }
+  | { t: "rate-limited"; message: string }
   | { t: "error" }
   | { t: "disabled" };
 
@@ -329,11 +329,18 @@ function AiSummarySection({
           summary?: string | null;
           disabled?: boolean;
           rateLimited?: boolean;
+          message?: string;
           error?: boolean;
         };
         if (data.disabled) setState({ t: "disabled" });
-        else if (data.rateLimited) setState({ t: "rate-limited" });
-        else if (data.summary) setState({ t: "has", text: data.summary });
+        else if (data.rateLimited) {
+          setState({
+            t: "rate-limited",
+            message:
+              data.message
+              ?? "Rate limit exceeded for the free Gemini version. Please try again in a little while.",
+          });
+        } else if (data.summary) setState({ t: "has", text: data.summary });
         else setState({ t: "error" });
       })
       .catch((err: unknown) => {
@@ -363,7 +370,7 @@ function AiSummarySection({
       )}
       {state.t === "rate-limited" && (
         <p className="ai-summary-rate-limited">
-          AI summary is limited per user on the free tier — try another area shortly.
+          {state.message}
         </p>
       )}
       {state.t === "error" && (
@@ -373,7 +380,7 @@ function AiSummarySection({
       )}
       {state.t === "disabled" && (
         <p className="ai-summary-placeholder">
-          Add a <code>GEMINI_API_KEY</code> to enable AI summaries.
+          Add <code>GEMINI_API_KEY</code> and <code>GEMINI_MODEL</code> to enable AI summaries.
         </p>
       )}
     </section>

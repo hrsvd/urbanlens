@@ -137,11 +137,11 @@ The current uncompressed GeoJSON per locality is acceptable for an MVP and compr
 
 All LLM calls are routed through a single module that wraps the Gemini REST API. Swapping model or provider is a one-file change. The module:
 
-- returns `null` (never throws) on missing key, API error, non-2xx response, Zod validation failure, or timeout;
+- returns `null` (never throws) on missing Gemini configuration, API error, non-2xx response, Zod validation failure, or timeout;
 - validates the response with Zod before extracting text;
-- reads the model name from `GEMINI_MODEL` (default `gemini-1.5-flash`).
+- reads the model name from `GEMINI_MODEL`, with no model name hardcoded in application logic.
 
-`isAiEnabled()` exposes key presence so components and routes can render clean placeholder UI without a try/catch.
+`isAiEnabled()` exposes complete key-and-model configuration so components and routes can render clean placeholder UI without a try/catch.
 
 ### Feature: per-cell AI summary (pre-generated, offline)
 
