@@ -11,7 +11,7 @@ export const SOCIAL = {
   githubProject: "https://github.com/hrsvd/urbanlens",
 
   /** LinkedIn profile URL — replace the placeholder with the real URL */
-  linkedin: "https://linkedin.com/in/PLACEHOLDER_YOUR_LINKEDIN",
+  linkedin: "https://www.linkedin.com/in/harshvardhansingh-in/",
 
   /** Absolute path inside /public for the UPI QR code image.
    *  Drop the real image at public/support/upi-qr.png to activate it.
